@@ -181,7 +181,7 @@ class My_lil_matrix():
         elif axis==0:
             return sum([i[0] for i in Mat.data])
 
-    def cossim(self,Mat2):
+    def cossimrowtorow(self, Mat2):
 
         n=min(self.shape[0],Mat2.shape[0])
         Res=[0]*n

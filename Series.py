@@ -27,10 +27,12 @@ import pickle
 import random
 import re
 from math import sqrt
+
 import nltk
 import numpy
+import scipy.sparse
 from scipy.io import mmwrite, mmread
-from scipy.sparse import *
+
 from My_lil_matrix import My_lil_matrix
 
 if os.environ['COMPUTERNAME'] == 'TIE':
@@ -50,9 +52,9 @@ class Projet():
         self.RevSsnKey = dict()
         self.RevWrdKey = dict()
         if EpiMat:
-            self.EpiMat = dok_matrix(EpiMat)
+            self.EpiMat = scipy.sparse.dok_matrix(EpiMat)
         else:
-            self.EpiMat = dok_matrix((nrow, 0), dtype=int)
+            self.EpiMat = scipy.sparse.dok_matrix((nrow, 0), dtype=int)
         self.NbrWrd = self.EpiMat.shape[1]
 
         #Initialising Constants
@@ -60,6 +62,7 @@ class Projet():
         self.Initialised=0
         self.pathDumps = pathDumps
         self.Languages = ['english']
+        self.Stemmer=nltk.stem.SnowballStemmer('english')
 
         # Regular expressions used to treat strings
 
@@ -76,7 +79,7 @@ class Projet():
     def TxtTrt(self, Text):
         '''Prends en argument une chaine de charactères, retourne une liste de mots'''
         LstWrd = self.TrtPat.sub(' ', Text).lower().split(' ')
-
+        LstWrd=[self.Stemmer.stem(i) for i in LstWrd]
         return LstWrd
 
     def InitStats(self):
@@ -87,7 +90,7 @@ class Projet():
         print('Matrix format changed to Lil, do not add more series')
         self.Initialised=1
 
-    def CleanUpEpiMat(self,maxDF=100,minDF=5):
+    def CleanUpStatsMat(self, maxDF=100, minDF=5):
         """
 Remove lines and rows from self.EpiMat.
 Currently removes rows of languages not in self.languages.
@@ -107,14 +110,14 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
         LangMat = None
         for Lang in nltk.corpus.stopwords._fileids:
             stpwrds = nltk.corpus.stopwords.words(Lang)
-            line = dok_matrix((1, m), dtype=int)
+            line = scipy.sparse.dok_matrix((1, m), dtype=int)
             for wrd in stpwrds:
                 try:
                     line[0, self.WrdKey[wrd]] = 1
                 except KeyError:
                     continue
             if LangMat != None:
-                LangMat = vstack([LangMat, line],format='csr')
+                LangMat = scipy.sparse.vstack([LangMat, line], format='csr')
             else:
                 LangMat = line
 
@@ -170,7 +173,7 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
     def GrpByK(self,k,PrtInd=[]):
         print('Starting GrbByK')
         Mat=self.EpiMat
-        PrtList=random.sample(range(self.EpiMat.shape[0]),k)
+        PrtList=random.sample(range(self.EpiMat.shape[0]), k)
         for i in range(len(PrtInd)):
             if PrtInd[i] not in PrtList:
                 PrtList[i]=PrtInd[i]
@@ -199,7 +202,7 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
             PrtMat=[i.averagerow() for i in PrtMat]
             PrtMat=PrtMat[0].combine(PrtMat[1:])
             print('Nouveaux prototypes calculés, comparaison avec les anciens')
-            if min(OldPrt.cossim(PrtMat))>0.99:
+            if min(OldPrt.cossimrowtorow(PrtMat))>0.99:
                 break
 
         return Grps,OldPrt
@@ -290,6 +293,9 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
         else:
             m -= len(Series)
         while m != 0:
+            if LstSri[i].split('  ')[0] in Numbers:
+                i+=1
+                continue
             Series.append(LstSri[i])
             i += 1
             m -= 1
@@ -380,7 +386,7 @@ def go(n=10, N=[1000,53,15,1235]):
     Test.dump()
 def g():
     Test.load()
-    Test.CleanUpEpiMat(70,5)
+    Test.CleanUpStatsMat(70, 5)
     t=Test.GrpByK(10)
     with open(pathDumps+'/Kmeansdata100.txt','a') as F:
         print([t[0].count([i]) for i in range(10)],file=F)
