@@ -36,7 +36,7 @@ from scipy.io import mmwrite, mmread
 from My_lil_matrix import My_lil_matrix
 
 if os.environ['COMPUTERNAME'] == 'TIE':
-    pathDumps = 'C:/Coding/Python workshop/Cours/Projet L2'
+    pathDumps = 'C:/Users/Vivien/PycharmProjects/ProjetL2'
     pathData = 'E:/Documents/Programmes/addic7ed'
 else:
     pathDumps = '/tmp'
@@ -56,6 +56,8 @@ class Projet():
         else:
             self.EpiMat = scipy.sparse.dok_matrix((nrow, 0), dtype=int)
         self.NbrWrd = self.EpiMat.shape[1]
+        self.StatsMat = My_lil_matrix((1,1))
+
 
         #Initialising Constants
 
@@ -85,14 +87,14 @@ class Projet():
     def InitStats(self):
         if self.Initialised:
             return
-        self.EpiMat= My_lil_matrix(self.EpiMat.tolil())
-        self.EpiMat.apply(float)
+        self.StatsMat= My_lil_matrix(self.EpiMat.tolil())
+        self.StatsMat.apply(float)
         print('Matrix format changed to Lil, do not add more series')
         self.Initialised=1
 
     def CleanUpStatsMat(self, maxDF=100, minDF=5):
         """
-Remove lines and rows from self.EpiMat.
+Remove lines and rows from self.StatsMat.
 Currently removes rows of languages not in self.languages.
 Currently removes columns with a Document Frequency DF higher than maxDF% or lower than minDF.(flat amount)
         :param maxDF:
@@ -103,9 +105,9 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
         self.UpdateReversedWrdKey()
         RowToDel = []
         ColToDel = []
-        n = self.EpiMat.shape[0]
-        m = self.EpiMat.shape[1]
-        Mat = self.EpiMat.copy()
+        n = self.StatsMat.shape[0]
+        m = self.StatsMat.shape[1]
+        Mat = self.StatsMat.copy()
 
         LangMat = None
         for Lang in nltk.corpus.stopwords._fileids:
@@ -133,7 +135,7 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
         l=Mat.removerowsind(RowToDel)
 
         ##Adjusting indices
-        for i in range(len(RowToDel)):
+        for i in range(len(RowToDel)-1,-1,-1):
             t1=self.RevSsnKey[RowToDel[i]]
             t2=self.RevSsnKey[l[i]]
             self.SsnKey[t2]=RowToDel[i]
@@ -146,7 +148,7 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
 
         ##Moving onto columns
         Mat=Mat.transpose()
-        self.UpdateReversedWrdKey()
+
         #Filtering columns
         maxDF=Mat.shape[1]*maxDF/100
         NMat=[i for i in range(Mat.shape[0]) if len(Mat.rows[i])>=maxDF or len(Mat.rows[i])<=minDF]
@@ -168,12 +170,12 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
 
         #done
         Mat=Mat.transpose()
-        self.EpiMat=Mat
+        self.StatsMat=Mat
 
     def GrpByK(self,k,PrtInd=[]):
         print('Starting GrbByK')
-        Mat=self.EpiMat
-        PrtList=random.sample(range(self.EpiMat.shape[0]), k)
+        Mat=self.StatsMat
+        PrtList=random.sample(range(self.StatsMat.shape[0]), k)
         for i in range(len(PrtInd)):
             if PrtInd[i] not in PrtList:
                 PrtList[i]=PrtInd[i]
@@ -226,9 +228,9 @@ Le répertoire utilisé est self.pathDumps'''
         pickle.dump(self.SsnKey, file)
         file.close()
 
-        # file = open(self.pathDumps + '/StatsMat.dump', 'w+b')
-        # mmwrite(file, self.StatsMat)
-        # file.close()
+        file = open(self.pathDumps + '/StatsMat.dump', 'w+b')
+        pickle.dump(file, self.StatsMat)
+        file.close()
 
     def load(self):
         '''Charge self.EpiMat, self.WrdKey, self.SsnKey, self.StatsMat depuis le répertoire spécifié par self.pathf.
@@ -245,9 +247,9 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
         self.SsnKey = pickle.load(file)
         file.close()
 
-        # file = open(self.pathDumps + '/StatsMat.dump', 'r+b')
-        # self.StatsMat = mmread(file).tocsr()
-        # file.close()
+        file = open(self.pathDumps + '/StatsMat.dump', 'r+b')
+        self.StatsMat = pickle.load(file)
+        file.close()
 
         self.UpdateReversedWrdKey()
 
@@ -270,11 +272,10 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
 
             except KeyError:  # Cas où le mot est rencontré pour la première fois
 
-                Key[i] = self.NbrWrd
-                self.NbrWrd += 1
-                M.resize((M.shape[0], self.NbrWrd))
+                Key[i] = M.shape[1]
+                M.resize((M.shape[0], M.shape[1]+1))
 
-                M[Row, self.NbrWrd - 1] = 1
+                M[Row, M.shape[1] - 1] = 1
 
     def AddSeries(self, Path, m=-1, Numbers=[]):
         """
@@ -287,13 +288,13 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
         LstSri.remove('grab.txt')
         i = 0
         Numbers = [str(m) for m in Numbers]
-        Series = [S for S in LstSri if S.split('__')[0] in Numbers]
+        Series = [S for S in LstSri if S.split('___')[0] in Numbers]
         if m > 0 and m < len(Series):
             m = 0
         else:
             m -= len(Series)
         while m != 0:
-            if LstSri[i].split('  ')[0] in Numbers:
+            if LstSri[i].split('___')[0] in Numbers:
                 i+=1
                 continue
             Series.append(LstSri[i])
@@ -302,7 +303,7 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
         nbS=0
         for S in Series:
             nbS+=self.AddSerie(Path + '/' + S)
-        print(nbS,' séries ajoutées')
+            print(nbS,' séries ajoutées.')
 
     def AddSerie(self, Path):
         '''Path doit lier à un dossier dont le nom est de la forme spécifiée par SsnPat ('(\d+)___(\S+)'). Le séparateur du path doit être '/' 
