@@ -26,7 +26,7 @@ import os
 import pickle
 import random
 import re
-from math import sqrt
+from math import sqrt,log
 
 import nltk
 import numpy
@@ -84,7 +84,7 @@ class Projet():
         LstWrd=[self.Stemmer.stem(i) for i in LstWrd]
         return LstWrd
 
-    def InitStats(self,maxDF=100,minDF=0):
+    def InitStats(self,maxDF=100,minDF=0,TF=True,DF=True):
         self.StatsMat= My_lil_matrix(self.EpiMat.tolil())
         self.StatsMat.apply(float)
         print('Matrix format changed to Lil, do not add more series')
@@ -94,6 +94,17 @@ class Projet():
             for i in range(len(list)):
                 list[i]=list[i]/s
             return list
+        def DFnorm(list):
+            D=self.StatsMat.shape[0]
+            for i in range(len(list)):
+                list[i] *= log(D / len(list))
+            return list
+        self.StatsMat=self.StatsMat.transpose()
+        if DF:
+            self.StatsMat.apply(DFnorm,axis=2)
+        self.StatsMat=self.StatsMat.transpose()
+        if TF:
+            self.StatsMat.apply(TFnorm,axis=2)
 
     def CleanUpStatsMat(self, maxDF=100, minDF=5):
         """
@@ -208,7 +219,7 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
             if min(OldPrt.cossimrowtorow(PrtMat))>0.99:
                 break
 
-        return Grps,OldPrt
+        return Grps,OldPrt,PrtList
 
     def UpdateReversedWrdKey(self):
         self.RevWrdKey = {key: word for (word, key) in self.WrdKey.items()}
@@ -294,7 +305,7 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
             m = 0
         else:
             m -= len(Series)
-        while m != 0:
+        while m != 0 and i<len(LstSri):
             if LstSri[i].split('___')[0] in Numbers:
                 i+=1
                 continue
@@ -388,11 +399,27 @@ def go(n=10, N=[1000,53,15,1235]):
     Test.dump()
 def g():
     Test.load()
-    Test.InitStats(70,5)
-    t=Test.GrpByK(10)
+    DFmax=70
+    DFmin=5
+    TF=1
+    DF=1
+    nbr=10
+    Test.InitStats(DFmax,DFmin,TF,DF)
+    t=Test.GrpByK(nbr,[17, 168, 90, 46, 103, 87, 72, 142, 62, 34])
     with open(pathDumps+'/Kmeansdata100.txt','a') as F:
-        print([t[0].count([i]) for i in range(10)],file=F)
+        print('\n',file=F)
+        print([t[0].count([i]) for i in range(nbr)],' DFmax=',DFmax,' DFmin=',DFmin,' TF=',TF,' DF=',DF,file=F)
+        m=t[1]
+        l=[[Test.RevWrdKey[m.rows[j][m.data[j].index(list(sorted(m.data[j]).__reversed__())[i])]] for i in range(10)] for j in range(nbr)]
+        print('\n',file=F)
+        p=t[0]
+        u=[[Test.RevSsnKey[i] for i in range(len(p)) if p[i][0]==j] for j in range(nbr)]
+        for k in range(nbr):
+            print(l[k],file=F)
+            print(u[k],file=F)
+            print('',file=F)
     print('Done')
+    return t
 
 
 if __name__ == '__main__':
