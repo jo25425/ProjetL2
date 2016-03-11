@@ -84,13 +84,16 @@ class Projet():
         LstWrd=[self.Stemmer.stem(i) for i in LstWrd]
         return LstWrd
 
-    def InitStats(self):
-        if self.Initialised:
-            return
+    def InitStats(self,maxDF=100,minDF=0):
         self.StatsMat= My_lil_matrix(self.EpiMat.tolil())
         self.StatsMat.apply(float)
         print('Matrix format changed to Lil, do not add more series')
-        self.Initialised=1
+        self.CleanUpStatsMat(maxDF,minDF)
+        def TFnorm(list):
+            s=sum(list)
+            for i in range(len(list)):
+                list[i]=list[i]/s
+            return list
 
     def CleanUpStatsMat(self, maxDF=100, minDF=5):
         """
@@ -100,8 +103,6 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
         :param maxDF:
         :param minDF:
         """
-        if self.Initialised==0:
-            self.InitStats()
         self.UpdateReversedWrdKey()
         RowToDel = []
         ColToDel = []
@@ -229,7 +230,7 @@ Le répertoire utilisé est self.pathDumps'''
         file.close()
 
         file = open(self.pathDumps + '/StatsMat.dump', 'w+b')
-        pickle.dump(file, self.StatsMat)
+        pickle.dump(self.StatsMat,file)
         file.close()
 
     def load(self):
@@ -387,7 +388,7 @@ def go(n=10, N=[1000,53,15,1235]):
     Test.dump()
 def g():
     Test.load()
-    Test.CleanUpStatsMat(70, 5)
+    Test.InitStats(70,5)
     t=Test.GrpByK(10)
     with open(pathDumps+'/Kmeansdata100.txt','a') as F:
         print([t[0].count([i]) for i in range(10)],file=F)
