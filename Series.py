@@ -84,10 +84,11 @@ class Projet():
         LstWrd=[self.Stemmer.stem(i) for i in LstWrd]
         return LstWrd
 
-    def InitStats(self,maxDF=100,minDF=0,TF=True,DF=True):
-        self.StatsMat= My_lil_matrix(self.EpiMat.tolil())
+    def InitStats(self,maxDF=100,minDF=0,TF=True,DF=True,copy=True):
+        if copy:
+            self.StatsMat= My_lil_matrix(self.EpiMat.tolil())
         self.StatsMat.apply(float)
-        print('Matrix format changed to Lil, do not add more series')
+        print('Matrix format changed to Lil')
         self.CleanUpStatsMat(maxDF,minDF)
         def TFnorm(list):
             s=sum(list)
@@ -114,7 +115,7 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
         :param maxDF:
         :param minDF:
         """
-        self.UpdateReversedWrdKey()
+        self.UpdateDict()
         RowToDel = []
         ColToDel = []
         n = self.StatsMat.shape[0]
@@ -221,49 +222,58 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
 
         return Grps,OldPrt,PrtList
 
-    def UpdateReversedWrdKey(self):
-        self.RevWrdKey = {key: word for (word, key) in self.WrdKey.items()}
-        self.RevSsnKey = {key: word for (word, key) in self.SsnKey.items()}
+    def UpdateDict(self,FromWrd=1,FromSsn=1):
+        if FromWrd:
+            self.RevWrdKey = {key: word for (word, key) in self.WrdKey.items()}
+        else:
+            self.WrdKey = {key:word for (word,key) in self.RevWrdKey.items()}
+        if FromSsn:
+            self.RevSsnKey = {key: word for (word, key) in self.SsnKey.items()}
+        else:
+            self.SsnKey = {key: word for (word,key) in self.SsnKey.items()}
 
-    def dump(self):
+    def dump(self,EpiMat=True,WrdKey=True,SsnKey=True,StatsMat=True):
         '''Ecrit self.EpiMat, self.WrdKey, self.SsnKey, self.StatsMat sur le disque sous forme de fichiers .dump.
 Le répertoire utilisé est self.pathDumps'''
-        file = open(self.pathDumps + '/EpiMat.dump', 'w+b')
-        mmwrite(file, self.EpiMat)
-        file.close()
+        if EpiMat:
+            file = open(self.pathDumps + '/EpiMat.dump', 'w+b')
+            mmwrite(file, self.EpiMat)
+            file.close()
+        if WrdKey:
+            file = open(self.pathDumps + '/WrdKey.dump', 'w+b')
+            pickle.dump(self.WrdKey, file)
+            file.close()
+        if SsnKey:
+            file = open(self.pathDumps + '/SsnKey.dump', 'w+b')
+            pickle.dump(self.SsnKey, file)
+            file.close()
+        if StatsMat:
+            file = open(self.pathDumps + '/StatsMat.dump', 'w+b')
+            pickle.dump(self.StatsMat,file)
+            file.close()
 
-        file = open(self.pathDumps + '/WrdKey.dump', 'w+b')
-        pickle.dump(self.WrdKey, file)
-        file.close()
-
-        file = open(self.pathDumps + '/SsnKey.dump', 'w+b')
-        pickle.dump(self.SsnKey, file)
-        file.close()
-
-        file = open(self.pathDumps + '/StatsMat.dump', 'w+b')
-        pickle.dump(self.StatsMat,file)
-        file.close()
-
-    def load(self):
+    def load(self,EpiMat=True, WrdKey=True,SsnKey=True,StatsMat=True):
         '''Charge self.EpiMat, self.WrdKey, self.SsnKey, self.StatsMat depuis le répertoire spécifié par self.pathf.
 Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.mmwrite tandis que self.WrdKey et self.SsnKey sont au format utilisé par le protocole par défaut de pickle'''
-        file = open(self.pathDumps + '/EpiMat.dump', 'r+b')
-        self.EpiMat = mmread(file).todok()
-        file.close()
+        if EpiMat:
+            file = open(self.pathDumps + '/EpiMat.dump', 'r+b')
+            self.EpiMat = mmread(file).todok()
+            file.close()
 
-        file = open(self.pathDumps + '/WrdKey.dump', 'r+b')
-        self.WrdKey = pickle.load(file)
-        file.close()
+        if WrdKey:
+            file = open(self.pathDumps + '/WrdKey.dump', 'r+b')
+            self.WrdKey = pickle.load(file)
+            file.close()
+        if SsnKey:
+            file = open(self.pathDumps + '/SsnKey.dump', 'r+b')
+            self.SsnKey = pickle.load(file)
+            file.close()
+        if StatsMat:
+            file = open(self.pathDumps + '/StatsMat.dump', 'r+b')
+            self.StatsMat = pickle.load(file)
+            file.close()
 
-        file = open(self.pathDumps + '/SsnKey.dump', 'r+b')
-        self.SsnKey = pickle.load(file)
-        file.close()
-
-        file = open(self.pathDumps + '/StatsMat.dump', 'r+b')
-        self.StatsMat = pickle.load(file)
-        file.close()
-
-        self.UpdateReversedWrdKey()
+        self.UpdateDict()
 
     def AddEpiToRow(self, Text, Row):
 
@@ -398,13 +408,13 @@ def go(n=10, N=[1000,53,15,1235]):
     Test.AddSeries(pathData, m=n, Numbers=N)
     Test.dump()
 def g():
-    Test.load()
-    DFmax=70
+    Test.load(EpiMat=False)
+    DFmax=50
     DFmin=5
     TF=1
     DF=1
-    nbr=10
-    Test.InitStats(DFmax,DFmin,TF,DF)
+    nbr=25
+    Test.InitStats(DFmax,DFmin,TF,DF,copy=False)
     t=Test.GrpByK(nbr,[17, 168, 90, 46, 103, 87, 72, 142, 62, 34])
     with open(pathDumps+'/Kmeansdata100.txt','a') as F:
         print('\n',file=F)
@@ -415,8 +425,8 @@ def g():
         p=t[0]
         u=[[Test.RevSsnKey[i] for i in range(len(p)) if p[i][0]==j] for j in range(nbr)]
         for k in range(nbr):
-            print(l[k],file=F)
-            print(u[k],file=F)
+            print(str(l[k]).encode('utf-8'),file=F)
+            print(str(u[k]).encode('utf-8'),file=F)
             print('',file=F)
     print('Done')
     return t
