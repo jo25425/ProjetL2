@@ -26,7 +26,7 @@ import os
 import pickle
 import random
 import re
-from math import sqrt
+from math import sqrt,log
 
 import nltk
 import numpy
@@ -36,7 +36,7 @@ from scipy.io import mmwrite, mmread
 from My_lil_matrix import My_lil_matrix
 
 if os.environ['COMPUTERNAME'] == 'TIE':
-    pathDumps = 'C:/Coding/Python workshop/Cours/Projet L2'
+    pathDumps = 'C:/Users/Vivien/PycharmProjects/ProjetL2'
     pathData = 'E:/Documents/Programmes/addic7ed'
 else:
     pathDumps = '/tmp'
@@ -56,6 +56,8 @@ class Projet():
         else:
             self.EpiMat = scipy.sparse.dok_matrix((nrow, 0), dtype=int)
         self.NbrWrd = self.EpiMat.shape[1]
+        self.StatsMat = My_lil_matrix((1,1))
+
 
         #Initialising Constants
 
@@ -82,30 +84,43 @@ class Projet():
         LstWrd=[self.Stemmer.stem(i) for i in LstWrd]
         return LstWrd
 
-    def InitStats(self):
-        if self.Initialised:
-            return
-        self.EpiMat= My_lil_matrix(self.EpiMat.tolil())
-        self.EpiMat.apply(float)
-        print('Matrix format changed to Lil, do not add more series')
-        self.Initialised=1
+    def InitStats(self,maxDF=100,minDF=0,TF=True,DF=True,copy=True):
+        if copy:
+            self.StatsMat= My_lil_matrix(self.EpiMat.tolil())
+        self.StatsMat.apply(float)
+        print('Matrix format changed to Lil')
+        self.CleanUpStatsMat(maxDF,minDF)
+        def TFnorm(list):
+            s=sum(list)
+            for i in range(len(list)):
+                list[i]=list[i]/s
+            return list
+        def DFnorm(list):
+            D=self.StatsMat.shape[0]
+            for i in range(len(list)):
+                list[i] *= log(D / len(list))
+            return list
+        self.StatsMat=self.StatsMat.transpose()
+        if DF:
+            self.StatsMat.apply(DFnorm,axis=2)
+        self.StatsMat=self.StatsMat.transpose()
+        if TF:
+            self.StatsMat.apply(TFnorm,axis=2)
 
     def CleanUpStatsMat(self, maxDF=100, minDF=5):
         """
-Remove lines and rows from self.EpiMat.
+Remove lines and rows from self.StatsMat.
 Currently removes rows of languages not in self.languages.
 Currently removes columns with a Document Frequency DF higher than maxDF% or lower than minDF.(flat amount)
         :param maxDF:
         :param minDF:
         """
-        if self.Initialised==0:
-            self.InitStats()
-        self.UpdateReversedWrdKey()
+        self.UpdateDict()
         RowToDel = []
         ColToDel = []
-        n = self.EpiMat.shape[0]
-        m = self.EpiMat.shape[1]
-        Mat = self.EpiMat.copy()
+        n = self.StatsMat.shape[0]
+        m = self.StatsMat.shape[1]
+        Mat = self.StatsMat.copy()
 
         LangMat = None
         for Lang in nltk.corpus.stopwords._fileids:
@@ -133,7 +148,7 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
         l=Mat.removerowsind(RowToDel)
 
         ##Adjusting indices
-        for i in range(len(RowToDel)):
+        for i in range(len(RowToDel)-1,-1,-1):
             t1=self.RevSsnKey[RowToDel[i]]
             t2=self.RevSsnKey[l[i]]
             self.SsnKey[t2]=RowToDel[i]
@@ -146,7 +161,7 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
 
         ##Moving onto columns
         Mat=Mat.transpose()
-        self.UpdateReversedWrdKey()
+
         #Filtering columns
         maxDF=Mat.shape[1]*maxDF/100
         NMat=[i for i in range(Mat.shape[0]) if len(Mat.rows[i])>=maxDF or len(Mat.rows[i])<=minDF]
@@ -168,12 +183,12 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
 
         #done
         Mat=Mat.transpose()
-        self.EpiMat=Mat
+        self.StatsMat=Mat
 
     def GrpByK(self,k,PrtInd=[]):
         print('Starting GrbByK')
-        Mat=self.EpiMat
-        PrtList=random.sample(range(self.EpiMat.shape[0]), k)
+        Mat=self.StatsMat
+        PrtList=random.sample(range(self.StatsMat.shape[0]), k)
         for i in range(len(PrtInd)):
             if PrtInd[i] not in PrtList:
                 PrtList[i]=PrtInd[i]
@@ -205,51 +220,60 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
             if min(OldPrt.cossimrowtorow(PrtMat))>0.99:
                 break
 
-        return Grps,OldPrt
+        return Grps,OldPrt,PrtList
 
-    def UpdateReversedWrdKey(self):
-        self.RevWrdKey = {key: word for (word, key) in self.WrdKey.items()}
-        self.RevSsnKey = {key: word for (word, key) in self.SsnKey.items()}
+    def UpdateDict(self,FromWrd=1,FromSsn=1):
+        if FromWrd:
+            self.RevWrdKey = {key: word for (word, key) in self.WrdKey.items()}
+        else:
+            self.WrdKey = {key:word for (word,key) in self.RevWrdKey.items()}
+        if FromSsn:
+            self.RevSsnKey = {key: word for (word, key) in self.SsnKey.items()}
+        else:
+            self.SsnKey = {key: word for (word,key) in self.SsnKey.items()}
 
-    def dump(self):
+    def dump(self,EpiMat=True,WrdKey=True,SsnKey=True,StatsMat=True):
         '''Ecrit self.EpiMat, self.WrdKey, self.SsnKey, self.StatsMat sur le disque sous forme de fichiers .dump.
 Le répertoire utilisé est self.pathDumps'''
-        file = open(self.pathDumps + '/EpiMat.dump', 'w+b')
-        mmwrite(file, self.EpiMat)
-        file.close()
+        if EpiMat:
+            file = open(self.pathDumps + '/EpiMat.dump', 'w+b')
+            mmwrite(file, self.EpiMat)
+            file.close()
+        if WrdKey:
+            file = open(self.pathDumps + '/WrdKey.dump', 'w+b')
+            pickle.dump(self.WrdKey, file)
+            file.close()
+        if SsnKey:
+            file = open(self.pathDumps + '/SsnKey.dump', 'w+b')
+            pickle.dump(self.SsnKey, file)
+            file.close()
+        if StatsMat:
+            file = open(self.pathDumps + '/StatsMat.dump', 'w+b')
+            pickle.dump(self.StatsMat,file)
+            file.close()
 
-        file = open(self.pathDumps + '/WrdKey.dump', 'w+b')
-        pickle.dump(self.WrdKey, file)
-        file.close()
-
-        file = open(self.pathDumps + '/SsnKey.dump', 'w+b')
-        pickle.dump(self.SsnKey, file)
-        file.close()
-
-        # file = open(self.pathDumps + '/StatsMat.dump', 'w+b')
-        # mmwrite(file, self.StatsMat)
-        # file.close()
-
-    def load(self):
+    def load(self,EpiMat=True, WrdKey=True,SsnKey=True,StatsMat=True):
         '''Charge self.EpiMat, self.WrdKey, self.SsnKey, self.StatsMat depuis le répertoire spécifié par self.pathf.
 Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.mmwrite tandis que self.WrdKey et self.SsnKey sont au format utilisé par le protocole par défaut de pickle'''
-        file = open(self.pathDumps + '/EpiMat.dump', 'r+b')
-        self.EpiMat = mmread(file).todok()
-        file.close()
+        if EpiMat:
+            file = open(self.pathDumps + '/EpiMat.dump', 'r+b')
+            self.EpiMat = mmread(file).todok()
+            file.close()
 
-        file = open(self.pathDumps + '/WrdKey.dump', 'r+b')
-        self.WrdKey = pickle.load(file)
-        file.close()
+        if WrdKey:
+            file = open(self.pathDumps + '/WrdKey.dump', 'r+b')
+            self.WrdKey = pickle.load(file)
+            file.close()
+        if SsnKey:
+            file = open(self.pathDumps + '/SsnKey.dump', 'r+b')
+            self.SsnKey = pickle.load(file)
+            file.close()
+        if StatsMat:
+            file = open(self.pathDumps + '/StatsMat.dump', 'r+b')
+            self.StatsMat = pickle.load(file)
+            file.close()
 
-        file = open(self.pathDumps + '/SsnKey.dump', 'r+b')
-        self.SsnKey = pickle.load(file)
-        file.close()
-
-        # file = open(self.pathDumps + '/StatsMat.dump', 'r+b')
-        # self.StatsMat = mmread(file).tocsr()
-        # file.close()
-
-        self.UpdateReversedWrdKey()
+        self.UpdateDict()
 
     def AddEpiToRow(self, Text, Row):
 
@@ -270,11 +294,10 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
 
             except KeyError:  # Cas où le mot est rencontré pour la première fois
 
-                Key[i] = self.NbrWrd
-                self.NbrWrd += 1
-                M.resize((M.shape[0], self.NbrWrd))
+                Key[i] = M.shape[1]
+                M.resize((M.shape[0], M.shape[1]+1))
 
-                M[Row, self.NbrWrd - 1] = 1
+                M[Row, M.shape[1] - 1] = 1
 
     def AddSeries(self, Path, m=-1, Numbers=[]):
         """
@@ -287,13 +310,13 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
         LstSri.remove('grab.txt')
         i = 0
         Numbers = [str(m) for m in Numbers]
-        Series = [S for S in LstSri if S.split('__')[0] in Numbers]
+        Series = [S for S in LstSri if S.split('___')[0] in Numbers]
         if m > 0 and m < len(Series):
             m = 0
         else:
             m -= len(Series)
-        while m != 0:
-            if LstSri[i].split('  ')[0] in Numbers:
+        while m != 0 and i<len(LstSri):
+            if LstSri[i].split('___')[0] in Numbers:
                 i+=1
                 continue
             Series.append(LstSri[i])
@@ -302,7 +325,7 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
         nbS=0
         for S in Series:
             nbS+=self.AddSerie(Path + '/' + S)
-        print(nbS,' séries ajoutées')
+            print(nbS,' séries ajoutées.')
 
     def AddSerie(self, Path):
         '''Path doit lier à un dossier dont le nom est de la forme spécifiée par SsnPat ('(\d+)___(\S+)'). Le séparateur du path doit être '/' 
@@ -385,12 +408,28 @@ def go(n=10, N=[1000,53,15,1235]):
     Test.AddSeries(pathData, m=n, Numbers=N)
     Test.dump()
 def g():
-    Test.load()
-    Test.CleanUpStatsMat(70, 5)
-    t=Test.GrpByK(10)
+    Test.load(EpiMat=False)
+    DFmax=50
+    DFmin=5
+    TF=1
+    DF=1
+    nbr=25
+    Test.InitStats(DFmax,DFmin,TF,DF,copy=False)
+    t=Test.GrpByK(nbr,[17, 168, 90, 46, 103, 87, 72, 142, 62, 34])
     with open(pathDumps+'/Kmeansdata100.txt','a') as F:
-        print([t[0].count([i]) for i in range(10)],file=F)
+        print('\n',file=F)
+        print([t[0].count([i]) for i in range(nbr)],' DFmax=',DFmax,' DFmin=',DFmin,' TF=',TF,' DF=',DF,file=F)
+        m=t[1]
+        l=[[Test.RevWrdKey[m.rows[j][m.data[j].index(list(sorted(m.data[j]).__reversed__())[i])]] for i in range(10)] for j in range(nbr)]
+        print('\n',file=F)
+        p=t[0]
+        u=[[Test.RevSsnKey[i] for i in range(len(p)) if p[i][0]==j] for j in range(nbr)]
+        for k in range(nbr):
+            print(str(l[k]).encode('utf-8'),file=F)
+            print(str(u[k]).encode('utf-8'),file=F)
+            print('',file=F)
     print('Done')
+    return t
 
 
 if __name__ == '__main__':
