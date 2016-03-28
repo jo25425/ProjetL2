@@ -113,7 +113,17 @@ class My_lil_matrix():
         self.swaplines(Rows,R)
         self.resize((self.shape[0]-len(Rows),self.shape[1]))
         return R
-
+    def removerowsind2(self,Rows,Index):
+        NewInd=Index.copy()
+        N=self.shape[0]
+        for i in range(len(Rows)):
+            self.rows[Rows[i]]=self.rows[N-i-1]
+            self.data[Rows[i]]=self.data[N-i-1]
+            NewInd[Rows[i]]=NewInd[N-i-1]
+        for i in range(len(Rows)):
+            NewInd.pop(N-i-1)
+        self.resize((self.shape[0]-len(Rows),self.shape[1]))
+        return NewInd
     def subgroups(self,SubGroups):
         #each element of SubGroups is a list of indices to be added to the group
         """
@@ -164,6 +174,9 @@ class My_lil_matrix():
                 Mat.data[i]=[f(Mat.data[i])]
                 Mat.rows[i]=[0]
                 Mat.shape=[Mat.shape[0],1]
+        elif axis==2:
+            for i in range(Mat.shape[0]):
+                Mat.data[i]=f(Mat.data[i])
         return Mat
 
     def sum(self,axis=1,copy=True):
@@ -181,20 +194,42 @@ class My_lil_matrix():
         elif axis==0:
             return sum([i[0] for i in Mat.data])
 
-    def cossimrowtorow(self, Mat2):
+    def cossimrowtorow(self, Mat2,mode=0):
+        '''
+        Mode 0: Calcul ligne à ligne du cossim
+        Mode 1: le cossim de la ième ligne de mat 1 avec la jème ligne de mat 2 est en [i*m+j]
+        :param Mat2:
+        :param mode:
+        :return:
+        '''
+        if mode==0:
+            n=min(self.shape[0],Mat2.shape[0])
+            Res=[0]*n
+            def tmp(list):
+                res=0
+                for i in list:
+                    res+=i*i
+                return sqrt(res)
+            NrmMat1=self.apply(tmp,True,1)
+            NrmMat2=Mat2.apply(tmp,True,1)
+            for i in range(n):
+                Res[i]=sum([a*b for a,b in zip(self.data[i],Mat2.data[i])])/(NrmMat1.data[i][0]*NrmMat2.data[i][0])
+            return Res
+        elif mode==1:
+            n=self.shape[0]*Mat2.shape[0]
+            m=Mat2.shape[0]
+            Res=[0]*n
+            def tmp(list):
+                res=0
+                for i in list:
+                    res+=i*i
+                return sqrt(res)
+            NrmMat1=self.apply(tmp,True,1)
+            NrmMat2=Mat2.apply(tmp,True,1)
+            for i in range(n):
+                Res[i]=sum([a*b for a,b in zip(self.data[i%m],Mat2.data[i])])/(NrmMat1.data[i%m][0]*NrmMat2.data[i][0])
+            return Res
 
-        n=min(self.shape[0],Mat2.shape[0])
-        Res=[0]*n
-        def tmp(list):
-            res=0
-            for i in list:
-                res+=i*i
-            return sqrt(res)
-        NrmMat1=self.apply(tmp,True,1)
-        NrmMat2=Mat2.apply(tmp,True,1)
-        for i in range(n):
-            Res[i]=sum([a*b for a,b in zip(self.data[i],Mat2.data[i])])/(NrmMat1.data[i][0]*NrmMat2.data[i][0])
-        return Res
 
     def averagerow(self):
         Res=My_lil_matrix([1,self.shape[1]])
