@@ -227,7 +227,7 @@ class My_lil_matrix():
             NrmMat1=self.apply(tmp,True,1)
             NrmMat2=Mat2.apply(tmp,True,1)
             for i in range(n):
-                Res[i]=sum([a*b for a,b in zip(self.data[i%m],Mat2.data[i])])/(NrmMat1.data[i%m][0]*NrmMat2.data[i][0])
+                Res[i]=sum([a*b for a,b in zip(self.data[i//m],Mat2.data[i%m])])/(NrmMat1.data[i//m][0]*NrmMat2.data[i%m][0])
             return Res
 
 
