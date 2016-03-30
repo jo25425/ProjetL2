@@ -30,6 +30,7 @@ import re
 from math import sqrt,log
 
 import nltk
+import bisect
 import numpy
 import scipy.sparse
 from scipy.io import mmwrite, mmread
@@ -85,12 +86,12 @@ class Projet():
         #LstWrd=[i for i in LstWrd if self.WrdPat.search(i)]
         return LstWrd
 
-    def InitStats(self,maxDF=100,minDF=0,TF=True,DF=True,copy=True):
+    def InitStats(self,maxDF=100,minDF=0,TF=True,DF=True,copy=True,Smax=5000):
         if copy:
             self.StatsMat= My_lil_matrix(self.EpiMat.tolil())
         self.StatsMat.apply(float)
         print('Matrix format changed to Lil')
-        self.CleanUpStatsMat(maxDF,minDF)
+        self.CleanUpStatsMat(maxDF,minDF,Smax)
         def TFnorm(list):
             s=sum(list)
             for i in range(len(list)):
@@ -108,7 +109,7 @@ class Projet():
         if TF:
             self.StatsMat.apply(TFnorm,axis=2)
 
-    def CleanUpStatsMat(self, maxDF=100, minDF=5):
+    def CleanUpStatsMat(self, maxDF=100, minDF=5, Smax=5000):
         """
 Remove lines and rows from self.StatsMat.
 Currently removes rows of languages not in self.languages.
@@ -149,39 +150,25 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
         self.RevSsnKey=Mat.removerowsind2(RowToDel,self.RevSsnKey)
         self.UpdateDict(FromSsn=0)
 
-        ##Adjusting indices
-        # for i in range(len(RowToDel)-1,-1,-1):
-        #     t1=self.RevSsnKey[RowToDel[i]]
-        #     t2=self.RevSsnKey[l[i]]
-        #     self.SsnKey[t2]=RowToDel[i]
-        #     self.RevSsnKey[RowToDel[i]]=t2
-        #     self.SsnKey.pop(t1)
-        #     self.RevSsnKey.pop(l[i])
-
 
         print(len(RowToDel),' series removed')
-        #pdb.set_trace()
+
         ##Moving onto columns
         Mat=Mat.transpose()
 
         #Filtering columns
-        maxDF=Mat.shape[1]*maxDF/100
-        NMat=[i for i in range(Mat.shape[0]) if len(Mat.rows[i])>=maxDF or len(Mat.rows[i])<=minDF]# or not self.WrdPat.search(self.RevWrdKey[i])]
-        ColToDel+=NMat
+        maxDF=int(Mat.shape[1]*maxDF/100)
+        NMat=[(len(Mat.data[i]),i) for i in range(Mat.shape[0])]
+        NMat.sort(key=lambda x:x[0])
+        r=bisect.bisect_left(NMat,(maxDF,0))
+        l=bisect.bisect(NMat,(minDF,Mat.shape[0]))
+        ColToDel +=[i[1] for i in NMat[:l]]+[i[1] for i in NMat[r:]]
+        if r-l>Smax:
+            ColToDel+=[i[1] for i in NMat[l:r-Smax]]
 
         print('Starting to remove ', len(ColToDel),' words')
         self.RevWrdKey=Mat.removerowsind2(ColToDel,self.RevWrdKey)
         self.UpdateDict(FromWrd=0)
-        #return ColToDel, Mat, l
-
-        #Adjusting indices
-        # for i in range(len(ColToDel)-1,-1,-1):
-        #     t1=self.RevWrdKey[ColToDel[i]]
-        #     t2=self.RevWrdKey[l[i]]
-        #     self.WrdKey[t2]=ColToDel[i]
-        #     self.RevWrdKey[ColToDel[i]]=t2
-        #     self.WrdKey.pop(t1)
-        #     self.RevWrdKey.pop(l[i])
         print(len(ColToDel),' words removed')
 
         #done
@@ -430,7 +417,7 @@ def g():
         l=[[Test.RevWrdKey[m.rows[j][m.data[j].index(list(sorted(m.data[j]).__reversed__())[i])]] for i in range(30)] for j in range(nbr)]
         print('\n',file=F)
         p=t[0]
-        u=[[Test.RevSsnKey[i] for i in range(len(p)) if p[i][0]==j] for j in range(nbr)]
+        u=[[Test.RevSsnKey[i] for i in range(len(p)) if p[i]==j] for j in range(nbr)]
         for k in range(nbr):
             print(str(l[k]).encode('utf-8'),file=F)
             print(str(u[k]).encode('utf-8'),file=F)
