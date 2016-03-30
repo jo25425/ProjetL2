@@ -22,6 +22,7 @@
 ###Représenter les séries dans le plan où la droite des abscisses est le cosinus similarité avec un vecteur et la droite des ordonnées, celui avec un autre vecteur
 ###Représenter les series dans un espace de dimension n comme celui d'au dessus, on peut alors trier les vecteurs qu'on représente(totalité des séries) par norme pour établir une liste triée qu'une personne pourrait aimer
 
+import cProfile
 import os
 import pickle
 import random
@@ -55,13 +56,11 @@ class Projet():
             self.EpiMat = scipy.sparse.dok_matrix(EpiMat)
         else:
             self.EpiMat = scipy.sparse.dok_matrix((nrow, 0), dtype=int)
-        self.NbrWrd = self.EpiMat.shape[1]
         self.StatsMat = My_lil_matrix((1,1))
 
 
         #Initialising Constants
 
-        self.Initialised=0
         self.pathDumps = pathDumps
         self.Languages = ['english']
         self.Stemmer=nltk.stem.SnowballStemmer('english')
@@ -72,7 +71,8 @@ class Projet():
         self.EpiPat = re.compile(r'(\d+)__(\S+).txt')
         self.SubPat = re.compile(
             r'(\d+)\n(\d\d):(\d\d):(\d\d),(\d\d\d) --> (\d\d):(\d\d):(\d\d),(\d\d\d)\n(.*?)(?=(\n\d+\n)|\Z)', re.DOTALL)
-        self.TrtPat = re.compile(r'\W+')
+        self.TrtPat = re.compile(r'[\W_]+')
+        self.WrdPat=re.compile(r'[aeiouy]')
 
         # Logging failures
         self.ReadErr = []
@@ -82,6 +82,7 @@ class Projet():
         '''Prends en argument une chaine de charactères, retourne une liste de mots'''
         LstWrd = self.TrtPat.sub(' ', Text).lower().split(' ')
         LstWrd=[self.Stemmer.stem(i) for i in LstWrd]
+        #LstWrd=[i for i in LstWrd if self.WrdPat.search(i)]
         return LstWrd
 
     def InitStats(self,maxDF=100,minDF=0,TF=True,DF=True,copy=True):
@@ -145,40 +146,42 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
                 RowToDel.append(i)
 
         print('Starting to remove ', len(RowToDel), ' series')
-        l=Mat.removerowsind(RowToDel)
+        self.RevSsnKey=Mat.removerowsind2(RowToDel,self.RevSsnKey)
+        self.UpdateDict(FromSsn=0)
 
         ##Adjusting indices
-        for i in range(len(RowToDel)-1,-1,-1):
-            t1=self.RevSsnKey[RowToDel[i]]
-            t2=self.RevSsnKey[l[i]]
-            self.SsnKey[t2]=RowToDel[i]
-            self.RevSsnKey[RowToDel[i]]=t2
-            self.SsnKey.pop(t1)
-            self.RevSsnKey.pop(l[i])
+        # for i in range(len(RowToDel)-1,-1,-1):
+        #     t1=self.RevSsnKey[RowToDel[i]]
+        #     t2=self.RevSsnKey[l[i]]
+        #     self.SsnKey[t2]=RowToDel[i]
+        #     self.RevSsnKey[RowToDel[i]]=t2
+        #     self.SsnKey.pop(t1)
+        #     self.RevSsnKey.pop(l[i])
 
 
         print(len(RowToDel),' series removed')
-
+        #pdb.set_trace()
         ##Moving onto columns
         Mat=Mat.transpose()
 
         #Filtering columns
         maxDF=Mat.shape[1]*maxDF/100
-        NMat=[i for i in range(Mat.shape[0]) if len(Mat.rows[i])>=maxDF or len(Mat.rows[i])<=minDF]
+        NMat=[i for i in range(Mat.shape[0]) if len(Mat.rows[i])>=maxDF or len(Mat.rows[i])<=minDF]# or not self.WrdPat.search(self.RevWrdKey[i])]
         ColToDel+=NMat
 
         print('Starting to remove ', len(ColToDel),' words')
-        l=Mat.removerowsind(ColToDel)
+        self.RevWrdKey=Mat.removerowsind2(ColToDel,self.RevWrdKey)
+        self.UpdateDict(FromWrd=0)
         #return ColToDel, Mat, l
 
         #Adjusting indices
-        for i in range(len(ColToDel)-1,-1,-1):
-            t1=self.RevWrdKey[ColToDel[i]]
-            t2=self.RevWrdKey[l[i]]
-            self.WrdKey[t2]=ColToDel[i]
-            self.RevWrdKey[ColToDel[i]]=t2
-            self.WrdKey.pop(t1)
-            self.RevWrdKey.pop(l[i])
+        # for i in range(len(ColToDel)-1,-1,-1):
+        #     t1=self.RevWrdKey[ColToDel[i]]
+        #     t2=self.RevWrdKey[l[i]]
+        #     self.WrdKey[t2]=ColToDel[i]
+        #     self.RevWrdKey[ColToDel[i]]=t2
+        #     self.WrdKey.pop(t1)
+        #     self.RevWrdKey.pop(l[i])
         print(len(ColToDel),' words removed')
 
         #done
@@ -217,10 +220,11 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
             PrtMat=[i.averagerow() for i in PrtMat]
             PrtMat=PrtMat[0].combine(PrtMat[1:])
             print('Nouveaux prototypes calculés, comparaison avec les anciens')
+            #pdb.set_trace()
             if min(OldPrt.cossimrowtorow(PrtMat))>0.99:
                 break
 
-        return Grps,OldPrt,PrtList
+        return [i[0] for i in Grps],OldPrt,PrtList
 
     def UpdateDict(self,FromWrd=1,FromSsn=1):
         if FromWrd:
@@ -230,7 +234,7 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
         if FromSsn:
             self.RevSsnKey = {key: word for (word, key) in self.SsnKey.items()}
         else:
-            self.SsnKey = {key: word for (word,key) in self.SsnKey.items()}
+            self.SsnKey = {key: word for (word,key) in self.RevSsnKey.items()}
 
     def dump(self,EpiMat=True,WrdKey=True,SsnKey=True,StatsMat=True):
         '''Ecrit self.EpiMat, self.WrdKey, self.SsnKey, self.StatsMat sur le disque sous forme de fichiers .dump.
@@ -251,6 +255,7 @@ Le répertoire utilisé est self.pathDumps'''
             file = open(self.pathDumps + '/StatsMat.dump', 'w+b')
             pickle.dump(self.StatsMat,file)
             file.close()
+        print("Done dumping")
 
     def load(self,EpiMat=True, WrdKey=True,SsnKey=True,StatsMat=True):
         '''Charge self.EpiMat, self.WrdKey, self.SsnKey, self.StatsMat depuis le répertoire spécifié par self.pathf.
@@ -272,7 +277,7 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
             file = open(self.pathDumps + '/StatsMat.dump', 'r+b')
             self.StatsMat = pickle.load(file)
             file.close()
-
+        print("Done loading")
         self.UpdateDict()
 
     def AddEpiToRow(self, Text, Row):
@@ -344,7 +349,7 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
                 continue
             LstEpi = os.listdir(Path + '/' + Season)
             NbrToAdd += len(LstEpi)
-        if NbrToAdd == 1:
+        if NbrToAdd <= 1:
             print('Skipping because of low number of episodes')
             return 0
 
@@ -404,23 +409,25 @@ def Language(Text):
     return m
 
 
-def go(n=10, N=[1000,53,15,1235]):
+def go(n=10, N=[]):#1000,53,15,1235]):
+    P.enable()
     Test.AddSeries(pathData, m=n, Numbers=N)
     Test.dump()
+    P.disable()
 def g():
-    Test.load(EpiMat=False)
-    DFmax=50
+    Test.load()
+    DFmax=30
     DFmin=5
     TF=1
     DF=1
-    nbr=25
-    Test.InitStats(DFmax,DFmin,TF,DF,copy=False)
-    t=Test.GrpByK(nbr,[17, 168, 90, 46, 103, 87, 72, 142, 62, 34])
-    with open(pathDumps+'/Kmeansdata100.txt','a') as F:
+    nbr=7
+    Test.InitStats(DFmax,DFmin,TF,DF)
+    t=Test.GrpByK(nbr)#,[1479, 950, 2552, 1556, 2650, 1054, 631])
+    with open(pathDumps+'/Kmeansdata10.txt','a') as F:
         print('\n',file=F)
         print([t[0].count([i]) for i in range(nbr)],' DFmax=',DFmax,' DFmin=',DFmin,' TF=',TF,' DF=',DF,file=F)
         m=t[1]
-        l=[[Test.RevWrdKey[m.rows[j][m.data[j].index(list(sorted(m.data[j]).__reversed__())[i])]] for i in range(10)] for j in range(nbr)]
+        l=[[Test.RevWrdKey[m.rows[j][m.data[j].index(list(sorted(m.data[j]).__reversed__())[i])]] for i in range(30)] for j in range(nbr)]
         print('\n',file=F)
         p=t[0]
         u=[[Test.RevSsnKey[i] for i in range(len(p)) if p[i][0]==j] for j in range(nbr)]
@@ -435,6 +442,7 @@ def g():
 if __name__ == '__main__':
     Test = Projet()
     l = os.listdir(pathData)
+    P=cProfile.Profile()
 
 
 # tmp : t=sum([sum([Test.StatsMat.getrow(i) for i in p.values()]) for p in m])
