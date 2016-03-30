@@ -114,6 +114,7 @@ class My_lil_matrix():
         self.resize((self.shape[0]-len(Rows),self.shape[1]))
         return R
     def removerowsind2(self,Rows,Index):
+        Rows.sort(reverse=True)
         NewInd=Index.copy()
         N=self.shape[0]
         for i in range(len(Rows)):
