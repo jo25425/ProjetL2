@@ -22,10 +22,12 @@ class Grapher():
             return i
         else:
             return i%self.Proj.StatsMat.shape[0],i//self.Proj.StatsMat.shape[0]
-    def ComparedToRows(self, n1, n2,GroupBy=None):
-        Mat=self.Proj.StatsMat.subgroups([[n1,n2]])[0]
-        m=len(self.Proj.StatsMat.rows)
-        values=Mat.cossimrowtorow(self.Proj.StatsMat,mode=1)
+    def ComparedToRows(self, n1, n2,GroupBy=None,data=None):
+        if not data:
+            data=self.Proj.StatsMat
+        Mat=data.subgroups([[n1,n2]])[0]
+        m=len(data.rows)
+        values=Mat.cossimrowtorow(data,mode=1)
         if GroupBy:
             NbGrps=max(GroupBy)+1
             Grps=[list() for i in range(NbGrps)]
@@ -57,5 +59,5 @@ if __name__=='__main__':
     Test.InitStats(70,5,1,1)
     TestG=Grapher(Test)
     i=TestG.FindBestRows()
-    G=Test.GrpByK(10)
-    p=TestG.ComparedToRows(i[0],i[1],GroupBy=G[0])
+    G=Test.GrpByK(2)
+    p=TestG.ComparedToRows(G[2][0],G[2][1],GroupBy=G[0]+[0,1],data=G[1].combine([Test.StatsMat]))
