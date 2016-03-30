@@ -28,9 +28,8 @@ import pickle
 import random
 import re
 from math import sqrt,log
-
-import nltk
 import bisect
+import nltk
 import numpy
 import scipy.sparse
 from scipy.io import mmwrite, mmread
@@ -91,7 +90,7 @@ class Projet():
             self.StatsMat= My_lil_matrix(self.EpiMat.tolil())
         self.StatsMat.apply(float)
         print('Matrix format changed to Lil')
-        self.CleanUpStatsMat(maxDF,minDF,Smax)
+        self.CleanUpStatsMat(maxDF,minDF)
         def TFnorm(list):
             s=sum(list)
             for i in range(len(list)):
@@ -320,7 +319,7 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
             print(nbS,' séries ajoutées.')
 
     def AddSerie(self, Path):
-        '''Path doit lier à un dossier dont le nom est de la forme spécifiée par SsnPat ('(\d+)___(\S+)'). Le séparateur du path doit être '/' 
+        '''Path doit lier à un dossier dont le nom est de la forme spécifiée par SsnPat ('(\d+)___(\S+)'). Le séparateur du path doit être '/'
         :type Path: String
         '''
 
