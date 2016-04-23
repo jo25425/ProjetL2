@@ -37,8 +37,11 @@ from scipy.io import mmwrite, mmread
 from My_lil_matrix import My_lil_matrix
 
 if os.environ['COMPUTERNAME'] == 'TIE':
-    pathDumps = 'C:/Users/Vivien/PycharmProjects/ProjetL2'
+    pathDumps = 'C:/Users/Vivien/PycharmProjects/ProjetL2/dumps'
     pathData = 'E:/Documents/Programmes/addic7ed'
+elif os.environ['COMPUTERNAME'] == 'Janice':
+    pathDumps = 'C:\projet l2'
+    pathData = 'C:\tmp\addic7ed\addic7ed'
 else:
     pathDumps = '/tmp'
     pathData = '/tmp/addic7ed'
@@ -222,45 +225,50 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
         else:
             self.SsnKey = {key: word for (word,key) in self.RevSsnKey.items()}
 
-    def dump(self,EpiMat=True,WrdKey=True,SsnKey=True,StatsMat=True):
+    def dump(self,name=None,EpiMat=True,WrdKey=True,SsnKey=True,StatsMat=True):
         '''Ecrit self.EpiMat, self.WrdKey, self.SsnKey, self.StatsMat sur le disque sous forme de fichiers .dump.
 Le répertoire utilisé est self.pathDumps'''
+        if not name:
+            if self.EpiMat.shape[0]>2:
+                name=self.EpiMat.shape[0]
+            else:
+                name=self.StatsMat.shape[0]
         if EpiMat:
-            file = open(self.pathDumps + '/EpiMat.dump', 'w+b')
+            file = open(self.pathDumps + '/EpiMat'+name+'.dump', 'w+b')
             mmwrite(file, self.EpiMat)
             file.close()
         if WrdKey:
-            file = open(self.pathDumps + '/WrdKey.dump', 'w+b')
+            file = open(self.pathDumps + '/WrdKey'+name+'.dump', 'w+b')
             pickle.dump(self.WrdKey, file)
             file.close()
         if SsnKey:
-            file = open(self.pathDumps + '/SsnKey.dump', 'w+b')
+            file = open(self.pathDumps + '/SsnKey'+name+'.dump', 'w+b')
             pickle.dump(self.SsnKey, file)
             file.close()
         if StatsMat:
-            file = open(self.pathDumps + '/StatsMat.dump', 'w+b')
+            file = open(self.pathDumps + '/StatsMat'+name+'.dump', 'w+b')
             pickle.dump(self.StatsMat,file)
             file.close()
         print("Done dumping")
 
-    def load(self,EpiMat=True, WrdKey=True,SsnKey=True,StatsMat=True):
+    def load(self,name='100',EpiMat=True, WrdKey=True,SsnKey=True,StatsMat=True):
         '''Charge self.EpiMat, self.WrdKey, self.SsnKey, self.StatsMat depuis le répertoire spécifié par self.pathf.
 Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.mmwrite tandis que self.WrdKey et self.SsnKey sont au format utilisé par le protocole par défaut de pickle'''
         if EpiMat:
-            file = open(self.pathDumps + '/EpiMat.dump', 'r+b')
+            file = open(self.pathDumps + '/EpiMat'+name+'.dump', 'r+b')
             self.EpiMat = mmread(file).todok()
             file.close()
 
         if WrdKey:
-            file = open(self.pathDumps + '/WrdKey.dump', 'r+b')
+            file = open(self.pathDumps + '/WrdKey'+name+'.dump', 'r+b')
             self.WrdKey = pickle.load(file)
             file.close()
         if SsnKey:
-            file = open(self.pathDumps + '/SsnKey.dump', 'r+b')
+            file = open(self.pathDumps + '/SsnKey'+name+'.dump', 'r+b')
             self.SsnKey = pickle.load(file)
             file.close()
         if StatsMat:
-            file = open(self.pathDumps + '/StatsMat.dump', 'r+b')
+            file = open(self.pathDumps + '/StatsMat'+name+'.dump', 'r+b')
             self.StatsMat = pickle.load(file)
             file.close()
         print("Done loading")
@@ -395,13 +403,13 @@ def Language(Text):
     return m
 
 
-def go(n=10, N=[]):#1000,53,15,1235]):
+def go(n=10, N=[],name=None):#1000,53,15,1235]):
     P.enable()
     Test.AddSeries(pathData, m=n, Numbers=N)
-    Test.dump()
+    Test.dump(name=name)
     P.disable()
 def g():
-    Test.load()
+    Test.load(name='100')
     DFmax=30
     DFmin=5
     TF=1

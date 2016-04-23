@@ -24,7 +24,14 @@ class My_lil_matrix():
             self.shape=list(arg.shape)
             self.rows=[arg.indices[arg.indptr[i]:arg.indptr[i+1]].tolist() for i in range(self.shape[0])]
             self.data=[arg.data[arg.indptr[i]:arg.indptr[i+1]].tolist() for i in range(self.shape[0])]
-
+    def __getitem__(self,item):
+        if type(item)==tuple and len(item)==2:
+            if item[1] in self.rows[item[0]]:
+                return self.data[item[0]][self.rows[item[0]].index(item[1])]
+            else:
+                return 0
+        else:
+            raise NotImplementedError
     def resize(self,shape):
         """
         Resize the matrix to the new shape by suppressing data in suppressed rows or adding zeros.
