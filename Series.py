@@ -93,7 +93,7 @@ class Projet():
             self.StatsMat= My_lil_matrix(self.EpiMat.tolil())
         self.StatsMat.apply(float)
         print('Matrix format changed to Lil')
-        self.CleanUpStatsMat(maxDF,minDF)
+        self.CleanUpStatsMat(maxDF,minDF,Smax)
         def TFnorm(list):
             s=sum(list)
             for i in range(len(list)):

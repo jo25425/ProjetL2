@@ -17,6 +17,7 @@ class Grapher():
         The goal of the function is to return 2 indexes that best represent the data or the index that best represent the data in conjunction with row if row is provided.
         :param row: index of lines
         :return : 1 value if row is provided, tuple of 2 if row isn't
+
         '''
         if row:
             L=self.Proj.StatsMat.subgroups([[row]])[0].cossimrowtorow(self.Proj.StatsMat,mode=1)
