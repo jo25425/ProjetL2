@@ -77,13 +77,21 @@ class Grapher():
         pyplot.xlabel('DF')
         pyplot.ylabel('TF dans {}'.format(self.Proj.RevSsnKey[Serie]))
         pyplot.show()
-
+    def PCA(self,Kmeans=True,k=10):
+        assert self.Proj.StatsMat.shape[0]>self.Proj.StatsMat.shape[1]
+        if Kmeans:
+            self.Proj.GrpByK(k)
+        colors=[self.cmap(i) for i in np.linspace(0,1,max(self.Proj.GrpK))]
+        p=mlab.PCA(self.Proj.StatsMat.tocsr().toarray())
+        l=p.project(p.a,p.fracs[2])
+        pyplot.scatter([i[0] for i in l],[i[1] for i in l], c=[colors[i] for i in self.Proj.GrpK])
+        pyplot.show()
 
 
 
 if __name__=='__main__':
     Test=Projet()
-    Test.load()
+    Test.load(name='1000-800',EpiMat=False)
     #Test.InitStats(70,5,1,1)
     TestG=Grapher(Test)
     #i=TestG.FindBestRows()
