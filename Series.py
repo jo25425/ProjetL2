@@ -59,8 +59,10 @@ class Projet():
             self.EpiMat = scipy.sparse.dok_matrix(EpiMat)
         else:
             self.EpiMat = scipy.sparse.dok_matrix((nrow, 0), dtype=int)
-        self.StatsMat = My_lil_matrix((1,1))
 
+        self.StatsMat = My_lil_matrix((1,1))
+        self.GrpK=[]
+        self.Prt=[]
 
         #Initialising Constants
 
@@ -213,6 +215,9 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
             if min(OldPrt.cossimrowtorow(PrtMat))>0.99:
                 break
 
+        self.GrpK=[i[0] for i in Grps]
+        self.Prt=OldPrt
+
         return [i[0] for i in Grps],OldPrt,PrtList
 
     def UpdateDict(self,FromWrd=1,FromSsn=1):
@@ -230,9 +235,9 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
 Le répertoire utilisé est self.pathDumps'''
         if not name:
             if self.EpiMat.shape[0]>2:
-                name=self.EpiMat.shape[0]
+                name=str(self.EpiMat.shape[0])
             else:
-                name=self.StatsMat.shape[0]
+                name=str(self.StatsMat.shape[0])
         if EpiMat:
             file = open(self.pathDumps + '/EpiMat'+name+'.dump', 'w+b')
             mmwrite(file, self.EpiMat)
