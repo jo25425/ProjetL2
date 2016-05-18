@@ -1,12 +1,12 @@
 # TODO
 # + Cleanup
-# + dump methode
-# + Easy switch faq/pc
+# - dump methode
+# - Easy switch faq/pc
 # + Traitement du texte
 # + Ajout Reversed WrdKey
 # + Ajout sélection inverse des paths
-# + Refactore AddStrToMat to AddEpiToRow
-# + Matrice conversion for stats
+# - Refactore AddStrToMat to AddEpiToRow
+# - Matrice conversion for stats
 # + Gestion des langues
 # + Ajout AddSeason
 # - Groupement par k-means
@@ -33,6 +33,7 @@ import nltk
 import numpy
 import scipy.sparse
 from scipy.io import mmwrite, mmread
+from collections import Counter
 
 from My_lil_matrix import My_lil_matrix
 
@@ -278,6 +279,23 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
             file.close()
         print("Done loading")
         self.UpdateDict()
+
+    def AddEpiToRowLil(self, Text, Row):
+        MShape=self.EpiMat.shape()
+        MRows=self.EpiMat.rows[Row]
+        MData=self.EpiMat.data[Row]
+        Key = self.WrdKey
+        Data=self.SubPat.findall(Text)
+        EpiWrds='\n'.join([m[9] for m in Data])
+        LstWrd= self.TxtTrt(EpiWrds)
+        C=Counter(LstWrd)
+        for i in C.keys() - Key.keys():
+            Key[i]=MShape[1]
+
+
+
+
+
 
     def AddEpiToRow(self, Text, Row):
 
