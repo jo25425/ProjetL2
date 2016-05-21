@@ -32,6 +32,23 @@ class My_lil_matrix():
                 return 0
         else:
             raise NotImplementedError
+    def non_zeros(self,axis=2):
+        '''
+        0 returns number of nonzeros for each row, 1 returns number of nonzeros for each column, 2 returns number of nonzeros for the whole matrix
+        :param axis: 0,1 or 2
+        :return number of non zeros along given axis:
+        '''
+        if axis>=1:
+            res=[len(i) for i in self.rows]
+            if axis==2:
+                return sum(res)
+            return res
+        #case axis=0
+        res=[0]*self.shape[1]
+        for i in self.rows:
+            for j in i:
+                res[j]+=1
+        return res
     def resize(self,shape):
         """
         Resize the matrix to the new shape by suppressing data in suppressed rows or adding zeros.
