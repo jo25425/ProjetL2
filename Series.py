@@ -281,16 +281,31 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
         self.UpdateDict()
 
     def AddEpiToRowLil(self, Text, Row):
-        MShape=self.EpiMat.shape
-        MRows=self.EpiMat.rows[Row]
-        MData=self.EpiMat.data[Row]
         Key = self.WrdKey
+
         Data=self.SubPat.findall(Text)
         EpiWrds='\n'.join([m[9] for m in Data])
         LstWrd= self.TxtTrt(EpiWrds)
-        Res=Counter(zip(MRows,MData))+Counter(LstWrd)
 
+        for Word in set(LstWrd)-Key.keys():
+            Key[Word]=self.EpiMat.shape[0]
+            self.EpiMat.resize((self.EpiMat.shape[0]+1,self.EpiMat.shape[1]))
+        LstWrd=[Key[i] for i in LstWrd]
 
+        Res=Counter(zip(self.EpiMat.rows[Row],self.EpiMat.data[Row]))+Counter(LstWrd)
+        Res=sorted(Res.items())
+
+        self.EpiMat.rows[Row]=[i[0] for i in Res]
+        self.EpiMat.data[Row]=[i[1] for i in Res]
+
+    def AddSerieLil(self,Path):
+
+        SriTitle=self.SsnPat.match(Path.split('/')[-1]).group(2)
+        print('Processing ', SriTitle, 'at', Path)
+        LstSsn=os.listdir(Path+'/')
+        LstSsn.sort()
+
+        PathstoAdd=[Path+'/'+i+'/'+j for j in os.listdir(Path+'/'+i+'/') for i in LstSsn if '.txt' not in i]
 
     def AddEpiToRow(self, Text, Row):
 
