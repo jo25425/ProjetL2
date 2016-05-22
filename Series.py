@@ -192,7 +192,7 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
         PrtMat=Mat.subgroups([PrtList])[0]
         OldPrt=PrtMat.copy()
         print('Rows put into matrix format')
-        NrmMat=Mat.apply(lambda x:x*x,copy=True).apply(sum,axis=1).apply(sqrt)
+        NrmMat=Mat.apply(lambda x:x**2,copy=True).apply(sum,axis=1).apply(sqrt)
 
         while True:
             Grps=Mat.dot(PrtMat.transpose().tocsr())
