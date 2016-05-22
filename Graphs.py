@@ -52,11 +52,11 @@ class Grapher():
         pyplot.ylabel('Proximité à {}'.format(self.Proj.RevSsnKey[n2]))
         pyplot.axis([0,max(values[:m],key=lambda x:0 if x>=0.99 else x),0,max(values[m:],key=lambda x:0 if x>=0.99 else x)])
         pyplot.show()
-    def WordsTFDF(self,Serie,GroupBy=None,data=None):
+    def WordsTFDF(self, Row, GroupBy=None, data=None):
         if not data:
             data=self.Proj.StatsMat
 
-        assert len(data.data[Serie])==len(data.rows[Serie])
+        assert len(data.data[Row]) == len(data.rows[Row])
         datat=data.transpose()
         if GroupBy:
             NbGrps=max(GroupBy)+1
@@ -68,15 +68,53 @@ class Grapher():
             NbGrps=1
             Grps=[list(range(data.shape[1]))]
             colors=[self.cmap(0)]
-        if type(Serie)==str:
-            Serie=self.Proj.SsnKey[Serie]
+        if type(Row)==str:
+            Row=self.Proj.SsnKey[Row]
         for i in range(NbGrps):
             valx=[len(datat.data[j]) for j in Grps[i]]
-            valy=[data[Serie,j] for j in Grps[i]]
+            valy=[data[Row, j] for j in Grps[i]]
             pyplot.plot(valx,valy,'d',color=colors[i])
         pyplot.xlabel('DF')
-        pyplot.ylabel('TF dans {}'.format(self.Proj.RevSsnKey[Serie]))
+        pyplot.ylabel('TF dans {}'.format(self.Proj.RevSsnKey[Row]))
         pyplot.show()
+    class TFDFRep():
+        def __init__(self,parent,Row=None):
+            self.parent=parent
+            self.matrix=parent.Proj.StatsMat
+            self.fig=pyplot.figure()
+            if Row:
+                self.LoadRow(Row)
+        def LoadRow(self,Row):
+
+            df=self.matrix.non_zeros(0)
+            self.data=[(i[0], i[1], df[i[0]]) for i in zip(self.matrix.rows[Row], self.matrix.data[Row])]
+            pyplot.figure(self.fig.number)
+
+            pyplot.plot([i[2] for i in self.data],[i[1] for i in self.data],'d',color=self.parent.cmap(0))
+
+            pyplot.xlabel('DF')
+            pyplot.ylabel('TF dans {}'.format(self.parent.Proj.RevSsnKey[Row]))
+            pyplot.show()
+        def FindWordsatPos(self,tf,df,n=10):
+            xmin=min(self.data,key=lambda x:x[2])[2]
+            xmax=max(self.data,key=lambda x:x[2])[2]
+            ymin=min(self.data,key=lambda x:x[1])[1]
+            ymax=max(self.data,key=lambda x:x[1])[1]
+            def dist(point):
+                return ((tf-point[1])/(ymax-ymin))**2+((df-point[2])/(xmax-xmin))**2
+            if len(self.data)<n:
+                return [(self.parent.Proj.RevWrdKey[i[0]],i[1],i[2]) for i in sorted(self.data,key=dist)]
+            return [(self.parent.Proj.RevWrdKey[i[0]],i[1],i[2]) for i in sorted(self.data,key=dist)[:n]]
+
+
+
+
+    def WordsTFDF2(self,Row,GroupBy=None,data=None):
+        if not data:
+            data=self.Proj.StatsMat
+        assert len(data.data[Row]) == len(data.rows[Row])
+        df=Test.StatsMat.non_zeros(0)
+        WordsTFDF=[(i[0],i[1],df[i[0]]) for i in zip(data.rows[Row],data.data[Row])]
     def PCA(self,Kmeans=True,k=10):
         assert self.Proj.StatsMat.shape[0]>self.Proj.StatsMat.shape[1]
         if Kmeans:
