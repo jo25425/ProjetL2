@@ -1,6 +1,6 @@
 
 
-import matplotlib.pyplot as pyplot
+import matplotlib.pyplot as plt
 from Series import Projet
 from My_lil_matrix import My_lil_matrix
 import pdb
@@ -11,7 +11,7 @@ class Grapher():
     def __init__(self,Proj=None):
         assert type(Proj)==Projet
         self.Proj=Proj
-        self.cmap=pyplot.get_cmap('Set1')
+        self.cmap=plt.get_cmap('Set1')
         self.cur_rep=[]
     def FindBestRows(self,row=None):
         '''
@@ -46,18 +46,18 @@ class Grapher():
             for i in range(NbGrps):
                 valx=[values[j] for j in Grps[i]]
                 valy=[values[j+m] for j in Grps[i]]
-                pyplot.plot(valx,valy,'d',color=colors[i])
+                plt.plot(valx, valy, 'd', color=colors[i])
         else:
-            pyplot.plot(values[:m],values[m:],'d')
-        pyplot.xlabel('Proximité à {}'.format(self.Proj.RevSsnKey[n1]))
-        pyplot.ylabel('Proximité à {}'.format(self.Proj.RevSsnKey[n2]))
-        pyplot.axis([0,max(values[:m],key=lambda x:0 if x>=0.99 else x),0,max(values[m:],key=lambda x:0 if x>=0.99 else x)])
-        pyplot.show()
+            plt.plot(values[:m], values[m:], 'd')
+        plt.xlabel('Proximité à {}'.format(self.Proj.RevSsnKey[n1]))
+        plt.ylabel('Proximité à {}'.format(self.Proj.RevSsnKey[n2]))
+        plt.axis([0, max(values[:m], key=lambda x:0 if x >= 0.99 else x), 0, max(values[m:], key=lambda x:0 if x >= 0.99 else x)])
+        plt.show()
     class _TFDFRep():
         def __init__(self,parent,Row=None):
             self.parent=parent
             self.matrix=parent.Proj.StatsMat
-            self.fig=pyplot.figure()
+            self.fig=plt.figure()
             parent.cur_rep.append(self)
             if Row:
                 self.LoadRow(Row)
@@ -71,9 +71,9 @@ class Grapher():
 
             df=self.matrix.non_zeros(0)
             self.data=[(i[0], df[i[0]], i[1]) for i in zip(self.matrix.rows[Row], self.matrix.data[Row])]
-            pyplot.figure(self.fig.number)
+            plt.figure(self.fig.number)
             if not Group:
-                pyplot.plot([i[1] for i in self.data],[i[2] for i in self.data],'d',color=self.parent.cmap(0))
+                plt.plot([i[1] for i in self.data], [i[2] for i in self.data], 'd', color=self.parent.cmap(0))
             else:
                 if isinstance(Group[0],int):
                     Groups=[]
@@ -91,15 +91,15 @@ class Grapher():
                 colors=[self.parent.cmap(i) for i in np.linspace(0,1,NbGrp+1)]
                 for SubGrp,color in zip(Groups,colors):
                     Datatoplot.difference_update(SubGrp)
-                    pyplot.plot([i[1] for i in SubGrp],[i[2] for i in SubGrp],'d',color=color)
+                    plt.plot([i[1] for i in SubGrp], [i[2] for i in SubGrp], 'd', color=color)
                 if len(Datatoplot)>0:
-                    pyplot.plot([i[1] for i in Datatoplot],[i[2] for i in Datatoplot],'d',color=colors[NbGrp])
+                    plt.plot([i[1] for i in Datatoplot], [i[2] for i in Datatoplot], 'd', color=colors[NbGrp])
 
-            pyplot.xlabel('DF')
-            pyplot.ylabel('TF')
+            plt.xlabel('DF')
+            plt.ylabel('TF')
             self.fig.suptitle(self.parent.Proj.RevSsnKey[Row])
 
-            pyplot.show()
+            plt.show()
         def FindWordsatPos(self,xycoord,xymax=None,n=10):
             '''
 
@@ -121,10 +121,10 @@ class Grapher():
             return [(self.parent.Proj.RevWrdKey[i[0]],i[1],i[2]) for i in self.data if xymax[1] >= i[2] >=
                     xycoord[1] and xymax[0] >= i[1] >= xycoord[0]]
         def AnnotateWordsatPos(self,xycoord,xymax=None,n=10):
-            pyplot.figure(self.fig.number)
+            plt.figure(self.fig.number)
             data=self.FindWordsatPos(xycoord,xymax,n)
             for i in data:
-                pyplot.annotate(i[0],xy=(i[1],i[2]))
+                plt.annotate(i[0], xy=(i[1], i[2]))
     def SerieTFDF(self, Row, GroupBy=None, data=None):
         '''
         Renvoie un objet permettant de représenter les mots présents dans la série au rang Row.
@@ -143,8 +143,23 @@ class Grapher():
         :param Word : liste de mots ou d'entiers
         :return:
         '''
-        Words=[self.Proj.WrdKey[i] for i in Word] if isinstance(Word[0],str) else Word
-
+        fig=plt.figure()
+        self.cur_rep.append(fig)
+        if isinstance(Word[0],str):
+            Rows=[self.Proj.WrdKey[i] for i in Word]
+            Words=Word
+        elif isinstance(Word[0],int):
+            Words=[self.Proj.RevWrdKey[i] for i in Word]
+            Rows=Word
+        else:
+            raise NotImplementedError
+        Transpose = self.Proj.StatsMat.transpose().subgroups([Rows])[0]
+        colors=[self.cmap(i) for i in np.linspace(0,1,len(Rows))]
+        plt.xticks(range(Transpose.shape[1]),[i[1] for i in sorted(self.Proj.RevSsnKey.items(),key=lambda x:x[0])])
+        for i in range(len(Rows)):
+            plt.plot(range(Transpose.shape[1]),[Transpose[i,j] for j in range(Transpose.shape[1])],color=colors[i],label=Words[i])
+        plt.legend()
+        plt.show()
 
 
     def PCA(self,Kmeans=True,k=10):
@@ -154,8 +169,8 @@ class Grapher():
         colors=[self.cmap(i) for i in np.linspace(0,1,max(self.Proj.GrpK))]
         p=mlab.PCA(self.Proj.StatsMat.tocsr().toarray())
         l=p.project(p.a,p.fracs[2])
-        pyplot.scatter([i[0] for i in l],[i[1] for i in l], c=[colors[i] for i in self.Proj.GrpK])
-        pyplot.show()
+        plt.scatter([i[0] for i in l], [i[1] for i in l], c=[colors[i] for i in self.Proj.GrpK])
+        plt.show()
 
 
 

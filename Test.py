@@ -38,3 +38,6 @@ def g():
 if __name__=='__main__':
     P=cProfile.Profile()
     Test=Projet()
+    Test.load('150')
+    TestG=Grapher(Test)
+    Test.InitStats(maxDF=80,minDF=5,Smax=5000,DF=False,TF=True)
