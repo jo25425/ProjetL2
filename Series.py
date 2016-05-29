@@ -22,7 +22,6 @@
 ###Représenter les séries dans le plan où la droite des abscisses est le cosinus similarité avec un vecteur et la droite des ordonnées, celui avec un autre vecteur
 ###Représenter les series dans un espace de dimension n comme celui d'au dessus, on peut alors trier les vecteurs qu'on représente(totalité des séries) par norme pour établir une liste triée qu'une personne pourrait aimer
 
-import cProfile
 import os
 import pickle
 import random
@@ -403,6 +402,43 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
         self.SriData.append((Title,nbSsn,nbEpi,nbWords))
 
         return nbSsn, nbEpi, nbWords
+
+    def AddSeriesLil(self, Path=None, m=-1, Numbers=[]):
+        if not Path:
+            pathData=self.pathData
+        else:
+            pathData=Path
+        SetSri = {i for i in os.listdir(Path) if os.path.isdir(Path+'/'+i)}
+
+        if m<0:
+            finalset=SetSri
+        else:
+            if len(Numbers)>0:
+                if isinstance(Numbers[0],int):
+                    Series={SetSri.pop(i) for i in SetSri if i.split('___')[0] in Numbers}
+                elif isinstance(Numbers[0],str):
+                    Series=set(Numbers)
+                    SetSri.difference_update(Series)
+            if m<len(Numbers):
+                print('Trop de séries prédéterminées')
+                return 0
+            Series.update(random.sample(SetSri,m-len(Numbers)))
+            finalset=Series
+        nbadd=0
+        nbwrds=0
+        nbssn=0
+        nbepi=0
+        for Serie,i in zip(finalset,range(len(finalset))):
+            res=self.AddSerieLil(Serie,path=pathData)
+            if res[0]:
+                nbadd+=1
+                nbssn+=res[0]
+                nbepi+=res[1]
+                nbwrds+=res[2]
+            print(i, 'ème série.')
+        print('{} mots dans {} épisodes dans {} saisons dans {} séries.'.format(nbwrds,nbepi,nbssn,nbadd))
+        print("{} séries ignorées par manque d'épisodes.".format(len(self.Skipped)))
+
 
     def AddEpiToRow(self, Text, Row):
 
