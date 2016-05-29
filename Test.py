@@ -3,12 +3,26 @@ from My_lil_matrix import *
 from Graphs import *
 import matplotlib.mlab as mlab
 from sklearn.decomposition import PCA
+import cProfile
+import pdb
+
+
+if os.environ['COMPUTERNAME'] == 'TIE':
+    pathProj = 'C:/Users/Vivien/PycharmProjects/ProjetL2'
+    pathDumps = 'C:/Users/Vivien/PycharmProjects/ProjetL2/dumps'
+    pathData = 'E:/Documents/Programmes/addic7ed'
+elif os.environ['COMPUTERNAME'] == 'Janice':
+    pathDumps = 'C:\projet l2'
+    pathData = 'C:\tmp\addic7ed\addic7ed'
+else:
+    pathDumps = '/tmp'
+    pathData = '/tmp/addic7ed'
 
 
 def go(n=10, N=[1245, 1235, 334, 558, 4], name=None):  # 1000,53,15,1235]):
     P.enable()
-    Test.AddSeries(pathData, m=n, Numbers=N)
-    Test.dump(name=name)
+    Test.AddSeriesLil(pathData, m=n, Numbers=N)
+    Test.dumpLil(name=name)
     P.disable()
 
 def g():
@@ -35,9 +49,26 @@ def g():
     print('Done')
     return t
 
+def names(find=False):
+    if not os.path.isfile(pathDumps+'/names.dump'):
+        find=True
+    if find:
+        namesrePat=re.compile('(\w+)([(]\d*[)])?\s+.+$',re.MULTILINE)
+        with open(pathProj + '/names.txt', 'r') as f:
+            nameslist=[i[0] for i in namesrePat.findall(f.read())]
+        with open(pathDumps+'/names.dump','w+b') as f:
+            pickle.dump(nameslist,f)
+        return nameslist
+
+    else:
+        with open(pathDumps+'/names.dump','r+b')as f:
+            return pickle.load(f)
+
 if __name__=='__main__':
     P=cProfile.Profile()
     Test=Projet()
-    Test.load('150')
-    TestG=Grapher(Test)
-    Test.InitStats(maxDF=80,minDF=5,Smax=5000,DF=False,TF=True)
+    Test.TreeTagger.tag_text('Hello there, what are you doing?')
+    #go(10,name='TestLiL10')
+    Test.loadLil('TestLiL10')
+    #TestG=Grapher(Test)
+    #Test.InitStats(maxDF=70,minDF=5,Smax=85,DF=False,TF=True)
