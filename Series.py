@@ -8,7 +8,7 @@
 # - Refactore AddStrToMat to AddEpiToRow
 # - Matrice conversion for stats
 # + Gestion des langues
-# + Ajout AddSeason
+# + Ajout AddSeasonLil
 # - Groupement par k-means
 # - Traitement de texte + précis
 
@@ -30,10 +30,11 @@ import re
 from math import sqrt,log
 import bisect
 import nltk
-import numpy
+import numpy as np
 import scipy.sparse
 from scipy.io import mmwrite, mmread
 from collections import Counter
+import treetaggerwrapper
 
 from My_lil_matrix import My_lil_matrix
 
@@ -49,46 +50,52 @@ else:
 
 
 class Projet():
-    def __init__(self, EpiMat=None, nrow=0):
+    def __init__(self, EpiMat=None, nrow=0,Dumps=pathDumps,Data=pathData):
 
         # Initialising variables
         self.WrdKey = dict()
         self.SsnKey = dict()
         self.RevSsnKey = dict()
         self.RevWrdKey = dict()
+
         if EpiMat:
             self.EpiMat = scipy.sparse.dok_matrix(EpiMat)
         else:
             self.EpiMat = scipy.sparse.dok_matrix((nrow, 0), dtype=int)
 
         self.StatsMat = My_lil_matrix((1,1))
-        self.GrpK=[]
-        self.Prt=[]
+        self.SriData = []
+        self.SsnData= [] #list of tuples
+        self.EpiData = [] #list of tuples
+        self.GrpK=[] #list of numbers
+        self.Prt=[] # list of lists
 
         #Initialising Constants
 
-        self.pathDumps = pathDumps
+        self.pathDumps = Dumps
+        self.pathData = Data
         self.Languages = ['english']
         self.Stemmer=nltk.stem.SnowballStemmer('english')
+        self.TreeTagger=treetaggerwrapper.TreeTagger(TAGLANG='en')
 
-        # Regular expressions used to treat strings
+        # Regular expressions used to process strings
 
         self.SsnPat = re.compile(r'(\d+)___(\S+)')
         self.EpiPat = re.compile(r'(\d+)__(\S+).txt')
         self.SubPat = re.compile(
             r'(\d+)\n(\d\d):(\d\d):(\d\d),(\d\d\d) --> (\d\d):(\d\d):(\d\d),(\d\d\d)\n(.*?)(?=(\n\d+\n)|\Z)', re.DOTALL)
-        self.TrtPat = re.compile(r'[\W_]+')
+        self.TrtPat = re.compile(r" +")
         self.WrdPat=re.compile(r'[aeiouy]')
 
         # Logging failures
+        self.Skipped = []
         self.ReadErr = []
         self.LangErr = []
 
     def TxtTrt(self, Text):
         '''Prends en argument une chaine de charactères, retourne une liste de mots'''
-        LstWrd = self.TrtPat.sub(' ', Text).lower().split(' ')
-        LstWrd=[self.Stemmer.stem(i) for i in LstWrd]
-        #LstWrd=[i for i in LstWrd if self.WrdPat.search(i)]
+        Text = self.TrtPat.sub(' ', Text)
+        LstWrd = [i[1]+'_'+i[2] for i in (j.split('\t') for j in self.TreeTagger.tag_text(Text,notagdns=True,notagemail=True,notagip=True,notagurl=True)) ]
         return LstWrd
 
     def InitStats(self,maxDF=100,minDF=0,TF=True,DF=True,copy=True,Smax=5000):
@@ -107,10 +114,10 @@ class Projet():
             for i in range(len(list)):
                 list[i] *= log(D / len(list))
             return list
-        self.StatsMat=self.StatsMat.transpose()
         if DF:
+            self.StatsMat=self.StatsMat.transpose()
             self.StatsMat.apply(DFnorm,axis=2)
-        self.StatsMat=self.StatsMat.transpose()
+            self.StatsMat=self.StatsMat.transpose()
         if TF:
             self.StatsMat.apply(TFnorm,axis=2)
 
@@ -200,7 +207,7 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
 
             NrmPrt=PrtMat.apply(lambda x:x*x,copy=True).apply(sum,axis=1).apply(sqrt).transpose()
 
-            Grps=numpy.divide(Grps,NrmMat.dot(NrmPrt.tocsr()))
+            Grps= np.divide(Grps, NrmMat.dot(NrmPrt.tocsr()))
             Grps=Grps.argmax(1).tolist()
 
             print('Calcul des nouveaux prototypes')
@@ -282,30 +289,120 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
 
     def AddEpiToRowLil(self, Text, Row):
         Key = self.WrdKey
-
         Data=self.SubPat.findall(Text)
         EpiWrds='\n'.join([m[9] for m in Data])
         LstWrd= self.TxtTrt(EpiWrds)
 
+        nbWrds=len(LstWrd)
+
         for Word in set(LstWrd)-Key.keys():
-            Key[Word]=self.EpiMat.shape[0]
-            self.EpiMat.resize((self.EpiMat.shape[0]+1,self.EpiMat.shape[1]))
+            Key[Word]=self.EpiMat.shape[1]
+            self.EpiMat.resize((self.EpiMat.shape[0],self.EpiMat.shape[1]+1))
+
         LstWrd=[Key[i] for i in LstWrd]
 
-        Res=Counter(zip(self.EpiMat.rows[Row],self.EpiMat.data[Row]))+Counter(LstWrd)
-        Res=sorted(Res.items())
+        self.EpiMat.AddToRow(Counter(LstWrd),Row)
 
-        self.EpiMat.rows[Row]=[i[0] for i in Res]
-        self.EpiMat.data[Row]=[i[1] for i in Res]
+        return nbWrds
 
-    def AddSerieLil(self,Path):
+    def AddEpisodeLil(self, SriTitle, numseason, Epi, path=None):
+        if not path:
+            path=self.pathData
 
-        SriTitle=self.SsnPat.match(Path.split('/')[-1]).group(2)
-        print('Processing ', SriTitle, 'at', Path)
-        LstSsn=os.listdir(Path+'/')
+        EpiPath= path + '/' + SriTitle + '/' + numseason + '/' + Epi
+
+        F = open(EpiPath, 'r', encoding="utf8")
+
+        print(SriTitle, '   ', numseason, '  ', Epi)
+
+        try:  # test de l'encoding utf8
+            Contents = F.read()
+
+        except UnicodeDecodeError:
+            F.close()
+
+            try:  # En cas d'erreur, essai de l'encoding latin-1
+                F = open(EpiPath, 'r', encoding="latin-1")
+                Contents = F.read()
+
+            except UnicodeDecodeError:  # Si toujours erreur, on passe au suivant en ajoutant cela aux erreurs
+                F.close()
+                self.ReadErr.append([Epi, numseason, EpiPath])
+                print('Erreur de décodage : Epi' + Epi + ' Season ' + numseason + 'Path' + EpiPath)
+                return 0
+
+        F.close()
+
+        Row = self.SsnKey[SriTitle]
+
+        res = self.AddEpiToRowLil(Contents,Row)
+
+        if not res:
+            return 0
+
+        self.EpiData.append((SriTitle, numseason, Epi, res))
+
+        return res
+
+    def AddSeasonLil(self, SriTitle, numseason, path=None):
+        if not path:
+            path=self.pathData
+        PathSsn= path + '/' + SriTitle + '/' + numseason
+        if not os.path.isdir(PathSsn):
+            return 0,0
+
+        nbEpi=0
+        nbWords=0
+        for Epi in sorted(os.listdir(PathSsn)):
+            res=self.AddEpisodeLil(SriTitle, numseason, Epi)
+            if res:
+                nbWords+=res
+                nbEpi+=1
+
+        if not nbEpi:
+            return 0,0
+
+        self.SsnData.append((SriTitle, numseason, nbEpi,nbWords))
+
+        return nbEpi,nbWords
+
+    def AddSerieLil(self, Title, path=None):
+
+        if not path:
+            path=self.pathData
+        PathSri = path + '/' + Title
+
+        SriTitle=self.SsnPat.match(PathSri.split('/')[-1]).group(2)
+        print('Processing ', SriTitle, 'at', PathSri)
+        LstSsn=os.listdir(PathSri + '/')
         LstSsn.sort()
 
-        PathstoAdd=[Path+'/'+i+'/'+j for j in os.listdir(Path+'/'+i+'/') for i in LstSsn if '.txt' not in i]
+        NbSsn=0
+        NbEpi=0
+
+        if sum([len(os.listdir(PathSri+'/'+j)) for j in (i for i in LstSsn if '.txt' not in i)])<=1:
+            print("Skipping because of low numbers of episode")
+            self.Skipped.append(SriTitle)
+            return 0, 0, 0
+
+        self.SsnKey[Title]=self.EpiMat.shape[0]
+        self.EpiMat.resize((self.EpiMat.shape[0]+1,self.EpiMat.shape[1]))
+
+        nbSsn=0
+        nbEpi=0
+        nbWords=0
+
+        for Season in LstSsn:
+            res = self.AddSeasonLil(Title,Season)
+            if res[0]:
+                nbSsn+=1
+                nbEpi+=res[0]
+                nbWords+=res[1]
+        if not nbSsn:
+            return 0, 0, 0
+        self.SriData.append((Title,nbSsn,nbEpi,nbWords))
+
+        return nbSsn, nbEpi, nbWords
 
     def AddEpiToRow(self, Text, Row):
 
