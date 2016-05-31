@@ -34,6 +34,7 @@ import scipy.sparse
 from scipy.io import mmwrite, mmread
 from collections import Counter
 import treetaggerwrapper
+import pdb
 
 from My_lil_matrix import My_lil_matrix
 
@@ -49,30 +50,26 @@ else:
 
 
 class Projet():
-    def __init__(self, EpiMat=None, nrow=0,Dumps=pathDumps,Data=pathData):
+    def __init__(self,Dumps=pathDumps,Data=pathData):
 
         # Initialising variables
         self.WrdKey = dict()
         self.SsnKey = dict()
         self.RevSsnKey = dict()
         self.RevWrdKey = dict()
+        self.StatsMat=My_lil_matrix((0, 0))
 
-        if EpiMat:
-            self.EpiMat = scipy.sparse.dok_matrix(EpiMat)
-        else:
-            self.EpiMat = scipy.sparse.dok_matrix((nrow, 0), dtype=int)
-
-        self.StatsMat = My_lil_matrix((1,1))
         self.SriData = []
         self.SsnData= [] #list of tuples
         self.EpiData = [] #list of tuples
-        self.GrpK=[] #list of numbers
-        self.Prt=[] # list of lists
+        self.KGroupes=[] #list of numbers
+        self.Prototypes=[] # list of lists
 
         #Initialising Constants
 
         self.pathDumps = Dumps
         self.pathData = Data
+        self.cur_title = None
         self.Languages = ['english']
         self.Stemmer=nltk.stem.SnowballStemmer('english')
         self.TreeTagger=treetaggerwrapper.TreeTagger(TAGLANG='en')
@@ -84,7 +81,6 @@ class Projet():
         self.SubPat = re.compile(
             r'(\d+)\n(\d\d):(\d\d):(\d\d),(\d\d\d) --> (\d\d):(\d\d):(\d\d),(\d\d\d)\n(.*?)(?=(\n\d+\n)|\Z)', re.DOTALL)
         self.TrtPat = re.compile(r" +")
-        self.WrdPat=re.compile(r'[aeiouy]')
 
         # Logging failures
         self.Skipped = []
@@ -98,11 +94,9 @@ class Projet():
         return LstWrd
 
     def InitStats(self,maxDF=100,minDF=0,TF=True,DF=True,copy=True,Smax=5000):
-        if copy:
-            self.StatsMat= My_lil_matrix(self.EpiMat.tolil())
         self.StatsMat.apply(float)
-        print('Matrix format changed to Lil')
-        self.CleanUpStatsMat(maxDF,minDF,Smax)
+        print('Matrix values changed to floats')
+        self.CleanUpStatsMatLil(maxDF,minDF,Smax)
         def TFnorm(list):
             s=sum(list)
             for i in range(len(list)):
@@ -119,6 +113,88 @@ class Projet():
             self.StatsMat=self.StatsMat.transpose()
         if TF:
             self.StatsMat.apply(TFnorm,axis=2)
+
+    def RemoveSeries(self,Series):
+        '''
+
+        :param Series: List of indices
+        :return:
+        '''
+
+        Change=self.StatsMat.removerowsind2(Series)
+        for new, old in Change.items():
+            self.RevSsnKey[new]=self.RevSsnKey[old]
+            del self.RevSsnKey[old]
+        self.UpdateDict(FromSsn=False)
+
+    def RemoveWords(self,Words):
+        Mat=self.StatsMat.transpose()
+        Change=Mat.removerowsind2(Words)
+        for new, old in Change.items():
+            self.RevWrdKey[new]=self.RevWrdKey[old]
+            del self.RevWrdKey[old]
+        self.UpdateDict(FromWrd=False)
+        self.StatsMat=Mat.transpose()
+
+    def FlagLanguages(self,data=None):
+
+        if not data:
+            data=self.StatsMat
+
+        LangMat=My_lil_matrix((0,data.shape[1]))
+        for Lang in nltk.corpus.stopwords._fileids:
+            stpwrds = nltk.corpus.stopwords.words(Lang)
+            C=Counter()
+            for i in stpwrds:
+                if 'DT_'+i in self.WrdKey:
+                    C[self.WrdKey['DT_'+i]]=1
+                elif 'IN_'+i in self.WrdKey:
+                    C[self.WrdKey['IN_'+i]]=1
+                elif 'PP_'+i in self.WrdKey:
+                    C[self.WrdKey['PP_'+i]]=1
+                elif 'NP_'+i in self.WrdKey:
+                    C[self.WrdKey['NP_'+i]]=1
+            if C:
+                LangMat.resize((LangMat.shape[0]+1,LangMat.shape[1]))
+                LangMat.AddToRow(C,LangMat.shape[0]-1)
+        LangMat = LangMat.tocsr().transpose()
+        LangMat = data.dot(LangMat).toarray()
+        LangMat = LangMat.argmax(1)
+
+        return LangMat
+
+    def CleanUpStatsMatLil(self, maxDF=100, minDF=5, Smax=5000):
+        self.UpdateDict()
+        RowToDel = []
+        ColToDel = []
+        n = self.StatsMat.shape[0]
+        m =self.StatsMat.shape[1]
+
+        LangMat = self.FlagLanguages()
+
+        RowToDel += [i for i in range(n) if nltk.corpus.stopwords._fileids[LangMat[i]] not in self.Languages]
+
+        print('Starting to remove ',len(RowToDel), 'series')
+        self.RemoveSeries(RowToDel)
+
+        ##Moving onto columns
+        Mat = self.StatsMat.transpose()
+
+        # Filtering columns
+        maxDF = int(Mat.shape[1] * maxDF / 100)
+        NMat = [(len(Mat.data[i]), i) for i in range(Mat.shape[0])]
+        NMat.sort(key=lambda x: x[0])
+        r = bisect.bisect_left(NMat, (maxDF, 0))
+        l = bisect.bisect(NMat, (minDF, Mat.shape[0]))
+        ColToDel += [i[1] for i in NMat[:l]] + [i[1] for i in NMat[r:]]
+        if r - l > Smax:
+            ColToDel += [i[1] for i in NMat[l:r - Smax]]
+
+        print('Starting to remove ', len(ColToDel), ' words')
+        self.RemoveWords(ColToDel)
+        print(len(ColToDel), ' words removed')
+
+        # done
 
     def CleanUpStatsMat(self, maxDF=100, minDF=5, Smax=5000):
         """
@@ -158,7 +234,7 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
                 RowToDel.append(i)
 
         print('Starting to remove ', len(RowToDel), ' series')
-        self.RevSsnKey=Mat.removerowsind2(RowToDel,self.RevSsnKey)
+        self.RevSsnKey=Mat.removerowsind(RowToDel, self.RevSsnKey)
         self.UpdateDict(FromSsn=0)
 
 
@@ -178,7 +254,7 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
             ColToDel+=[i[1] for i in NMat[l:r-Smax]]
 
         print('Starting to remove ', len(ColToDel),' words')
-        self.RevWrdKey=Mat.removerowsind2(ColToDel,self.RevWrdKey)
+        self.RevWrdKey=Mat.removerowsind(ColToDel, self.RevWrdKey)
         self.UpdateDict(FromWrd=0)
         print(len(ColToDel),' words removed')
 
@@ -186,7 +262,7 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
         Mat=Mat.transpose()
         self.StatsMat=Mat
 
-    def GrpByK(self,k,PrtInd=[]):
+    def GrpByK(self,k,PrtInd=()):
         print('Starting GrbByK')
         Mat=self.StatsMat
         PrtList=random.sample(range(self.StatsMat.shape[0]), k)
@@ -222,8 +298,8 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
             if min(OldPrt.cossimrowtorow(PrtMat))>0.99:
                 break
 
-        self.GrpK=[i[0] for i in Grps]
-        self.Prt=OldPrt
+        self.KGroupes=[i[0] for i in Grps]
+        self.Prototypes=OldPrt
 
         return [i[0] for i in Grps],OldPrt,PrtList
 
@@ -237,17 +313,74 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
         else:
             self.SsnKey = {key: word for (word,key) in self.RevSsnKey.items()}
 
+    def dumpLil(self,name=None,path=None):
+        if not path:
+            path=self.pathDumps
+        if not name:
+            name=self.cur_title
+        if not os.path.exists(path+'/'+name):
+            os.mkdir(path+'/'+name)
+        elif not os.path.isdir(path+'/'+name):
+            raise NotADirectoryError
+        dirpath=path+'/'+name
+
+        with open(dirpath+'/Epimat.dump','w+b') as f:
+            pickle.dump(self.StatsMat, f)
+
+        with open(dirpath+'/MetaData.dump','w+b') as f:
+            pickle.dump((self.SriData,self.SsnData,self.EpiData),f)
+
+        with open(dirpath+'/Dicts.dump','w+b') as f:
+            pickle.dump((self.SsnKey,self.WrdKey),f)
+
+        if self.KGroupes:
+            with open(dirpath+'/K-means.dump','w+b') as f:
+                pickle.dump((self.KGroupes, self.Prototypes),f)
+
+        if self.Skipped or self.ReadErr or self.LangErr:
+            with open(dirpath+'/Errors.dump','w+b') as f:
+                pickle.dump((self.Skipped,self.ReadErr,self.LangErr),f)
+        print('Dump success at ',dirpath)
+
+    def loadLil(self,name=None,path=None):
+        if not path:
+            path=self.pathDumps
+        if not name:
+            pass
+        if not os.path.exists(path+'/'+name) or not os.path.isdir(path+'/'+name):
+            raise NotADirectoryError
+        dirpath=path+'/'+name
+
+        with open(dirpath+'/EpiMat.dump','r+b') as f:
+            self.StatsMat=pickle.load(f)
+
+        with open(dirpath+'/MetaData.dump','r+b') as f:
+            self.SriData,self.SsnData,self.EpiData=pickle.load(f)
+
+        with open(dirpath+'/Dicts.dump','r+b') as f:
+            self.SsnKey,self.WrdKey=pickle.load(f)
+
+        if os.path.exists(dirpath+'/K-means.dump'):
+            with open(dirpath+'/K-means.dump','r+b') as f:
+                self.KGroupes,self.Prototypes=pickle.load(f)
+
+        if os.path.exists(dirpath+'/Errors.dump'):
+            with open(dirpath+'/Errors.dump','r+b') as f:
+                self.Skipped,self.ReadErr,self.LangErr=pickle.load(f)
+
+        print('Load success from ',dirpath)
+
     def dump(self,name=None,EpiMat=True,WrdKey=True,SsnKey=True,StatsMat=True):
         '''Ecrit self.EpiMat, self.WrdKey, self.SsnKey, self.StatsMat sur le disque sous forme de fichiers .dump.
 Le répertoire utilisé est self.pathDumps'''
         if not name:
-            if self.EpiMat.shape[0]>2:
-                name=str(self.EpiMat.shape[0])
+            if self.StatsMat.shape[0]>2:
+                name=str(self.StatsMat.shape[0])
             else:
                 name=str(self.StatsMat.shape[0])
         if EpiMat:
             file = open(self.pathDumps + '/EpiMat'+name+'.dump', 'w+b')
-            mmwrite(file, self.EpiMat)
+            mmwrite(file, self.StatsMat)
             file.close()
         if WrdKey:
             file = open(self.pathDumps + '/WrdKey'+name+'.dump', 'w+b')
@@ -266,9 +399,11 @@ Le répertoire utilisé est self.pathDumps'''
     def load(self,name='100',EpiMat=True, WrdKey=True,SsnKey=True,StatsMat=True):
         '''Charge self.EpiMat, self.WrdKey, self.SsnKey, self.StatsMat depuis le répertoire spécifié par self.pathf.
 Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.mmwrite tandis que self.WrdKey et self.SsnKey sont au format utilisé par le protocole par défaut de pickle'''
+
+
         if EpiMat:
             file = open(self.pathDumps + '/EpiMat'+name+'.dump', 'r+b')
-            self.EpiMat = mmread(file).todok()
+            self.StatsMat = mmread(file).todok()
             file.close()
 
         if WrdKey:
@@ -294,13 +429,16 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
 
         nbWrds=len(LstWrd)
 
+        if not nbWrds:
+            return 0
+
         for Word in set(LstWrd)-Key.keys():
-            Key[Word]=self.EpiMat.shape[1]
-            self.EpiMat.resize((self.EpiMat.shape[0],self.EpiMat.shape[1]+1))
+            Key[Word]=self.StatsMat.shape[1]
+            self.StatsMat.resize((self.StatsMat.shape[0], self.StatsMat.shape[1] + 1))
 
         LstWrd=[Key[i] for i in LstWrd]
 
-        self.EpiMat.AddToRow(Counter(LstWrd),Row)
+        self.StatsMat.AddToRow(Counter(LstWrd), Row)
 
         return nbWrds
 
@@ -384,8 +522,8 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
             self.Skipped.append(SriTitle)
             return 0, 0, 0
 
-        self.SsnKey[Title]=self.EpiMat.shape[0]
-        self.EpiMat.resize((self.EpiMat.shape[0]+1,self.EpiMat.shape[1]))
+        self.SsnKey[Title]=self.StatsMat.shape[0]
+        self.StatsMat.resize((self.StatsMat.shape[0] + 1, self.StatsMat.shape[1]))
 
         nbSsn=0
         nbEpi=0
@@ -403,7 +541,7 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
 
         return nbSsn, nbEpi, nbWords
 
-    def AddSeriesLil(self, Path=None, m=-1, Numbers=[]):
+    def AddSeriesLil(self, Path=None, m=-1, Numbers=()):
         if not Path:
             pathData=self.pathData
         else:
@@ -413,22 +551,28 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
         if m<0:
             finalset=SetSri
         else:
-            if len(Numbers)>0:
-                if isinstance(Numbers[0],int):
-                    Series={SetSri.pop(i) for i in SetSri if i.split('___')[0] in Numbers}
-                elif isinstance(Numbers[0],str):
-                    Series=set(Numbers)
-                    SetSri.difference_update(Series)
             if m<len(Numbers):
                 print('Trop de séries prédéterminées')
                 return 0
+            if len(Numbers)>0:
+                if isinstance(Numbers[0],int):
+                    Numbers=[str(i) for i in Numbers]
+                    Series={i for i in SetSri if i.split('___')[0] in Numbers}
+                    SetSri.difference_update(Series)
+                elif isinstance(Numbers[0],str):
+                    Series=set(Numbers)
+                    SetSri.difference_update(Series)
+                else:
+                    raise NotImplementedError
+            else:
+                Series=set()
             Series.update(random.sample(SetSri,m-len(Numbers)))
             finalset=Series
         nbadd=0
         nbwrds=0
         nbssn=0
         nbepi=0
-        for Serie,i in zip(finalset,range(len(finalset))):
+        for Serie,i in zip(finalset,range(1,len(finalset)+1)):
             res=self.AddSerieLil(Serie,path=pathData)
             if res[0]:
                 nbadd+=1
@@ -436,13 +580,13 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
                 nbepi+=res[1]
                 nbwrds+=res[2]
             print(i, 'ème série.')
-        print('{} mots dans {} épisodes dans {} saisons dans {} séries.'.format(nbwrds,nbepi,nbssn,nbadd))
+        print('{:,} mots dans {:,} épisodes dans {:,} saisons dans {:,} séries.'.format(nbwrds,nbepi,nbssn,nbadd))
         print("{} séries ignorées par manque d'épisodes.".format(len(self.Skipped)))
 
 
     def AddEpiToRow(self, Text, Row):
 
-        M = self.EpiMat
+        M = self.StatsMat
         Key = self.WrdKey
         Data = self.SubPat.findall(Text)
 
@@ -464,7 +608,7 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
 
                 M[Row, M.shape[1] - 1] = 1
 
-    def AddSeries(self, Path, m=-1, Numbers=[]):
+    def AddSeries(self, Path, m=-1, Numbers=()):
         """
 
         :type Numbers: IntList
@@ -513,8 +657,8 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
             print('Skipping because of low number of episodes')
             return 0
 
-        NbrSri = self.EpiMat.shape[0]
-        self.EpiMat.resize((NbrSri+1,self.EpiMat.shape[1]))
+        NbrSri = self.StatsMat.shape[0]
+        self.StatsMat.resize((NbrSri + 1, self.StatsMat.shape[1]))
 
         self.SsnKey[SriTitle]=NbrSri
 
