@@ -1,14 +1,14 @@
 # TODO
 # + Cleanup
-# - dump methode
+# - dump_old methode
 # - Easy switch faq/pc
 # + Traitement du texte
 # + Ajout Reversed WrdKey
 # + Ajout sélection inverse des paths
-# - Refactore AddStrToMat to AddEpiToRow
+# - Refactore AddStrToMat to AddEpiToRow_old
 # - Matrice conversion for stats
 # + Gestion des langues
-# + Ajout AddSeasonLil
+# + Ajout AddSeason
 # - Groupement par k-means
 # - Traitement de texte + précis
 
@@ -73,6 +73,10 @@ class Projet():
         self.Languages = ['english']
         self.Stemmer=nltk.stem.SnowballStemmer('english')
         self.TreeTagger=treetaggerwrapper.TreeTagger(TAGLANG='en')
+        self.tags={'WP$', 'RB', 'JJR', 'CC', 'VVZ', 'IN', 'PP$', 'VVG', 'DT', 'LS', 'VBD', 'VBZ', 'VBP', 'RBR', 'MD',
+                   'NP', 'RP', 'SENT', "''", 'WP', 'WDT', 'VVN', 'PP', 'WRB', 'JJ', 'NPS', 'PDT', 'VB', 'FW', 'CD', 'VVD',
+                   '$', 'UH', 'VV', 'SYM', 'VBG', 'VBN', '``', 'VHP', 'TO', 'IN/that', ':',
+                   'NNS', 'EX', 'VHD', 'NN', 'VH', 'VHG', '#', 'VHZ', ',', 'JJS', '(', ')', 'VVP', 'POS', 'RBS', 'VHN'}
 
         # Regular expressions used to process strings
 
@@ -115,7 +119,7 @@ class Projet():
             self.StatsMat.apply(TFnorm,axis=2)
 
     def RemoveSeries(self,Series):
-        '''
+        '''Test
 
         :param Series: List of indices
         :return:
@@ -127,41 +131,81 @@ class Projet():
             del self.RevSsnKey[old]
         self.UpdateDict(FromSsn=False)
 
-    def RemoveWords(self,Words):
-        Mat=self.StatsMat.transpose()
-        Change=Mat.removerowsind2(Words)
-        for new, old in Change.items():
-            self.RevWrdKey[new]=self.RevWrdKey[old]
-            del self.RevWrdKey[old]
-        self.UpdateDict(FromWrd=False)
-        self.StatsMat=Mat.transpose()
+    def RemoveWords(self, Words, data=None, RevWrdDict=None):
+        if not data:
+            data=self.StatsMat
+        if not RevWrdDict:
+            RevWrdDict=self.RevWrdKey
+        data.transpose(copy=False)
+        self._RemoveWords(Words, data, RevWrdDict)
+        data.transpose(copy=False)
 
-    def FlagLanguages(self,data=None):
+    def _RemoveWords(self, Words, data=None, RevWrdDict=None):
+        if not data:
+            data=self.StatsMat
+        if not RevWrdDict:
+            RevWrdDict=self.RevWrdKey
+
+        Change=data.removerowsind2(Words)
+        for new, old in Change.items():
+            RevWrdDict[new]=RevWrdDict[old]
+            del RevWrdDict[old]
+        self.UpdateDict(FromWrd=False)
+
+    def FlagLanguages(self,data=None,WrdDict=None):
 
         if not data:
             data=self.StatsMat
+        if not WrdDict:
+            WrdDict=self.WrdKey
 
         LangMat=My_lil_matrix((0,data.shape[1]))
         for Lang in nltk.corpus.stopwords._fileids:
             stpwrds = nltk.corpus.stopwords.words(Lang)
             C=Counter()
             for i in stpwrds:
-                if 'DT_'+i in self.WrdKey:
-                    C[self.WrdKey['DT_'+i]]=1
-                elif 'IN_'+i in self.WrdKey:
-                    C[self.WrdKey['IN_'+i]]=1
-                elif 'PP_'+i in self.WrdKey:
-                    C[self.WrdKey['PP_'+i]]=1
-                elif 'NP_'+i in self.WrdKey:
-                    C[self.WrdKey['NP_'+i]]=1
+                if 'DT_'+i in WrdDict:
+                    C[WrdDict['DT_'+i]]=1
+                elif 'IN_'+i in WrdDict:
+                    C[WrdDict['IN_'+i]]=1
+                elif 'PP_'+i in WrdDict:
+                    C[WrdDict['PP_'+i]]=1
+                elif 'NP_'+i in WrdDict:
+                    C[WrdDict['NP_'+i]]=1
             if C:
                 LangMat.resize((LangMat.shape[0]+1,LangMat.shape[1]))
-                LangMat.AddToRow(C,LangMat.shape[0]-1)
+                LangMat.addtorow(C, LangMat.shape[0] - 1)
         LangMat = LangMat.tocsr().transpose()
         LangMat = data.dot(LangMat).toarray()
         LangMat = LangMat.argmax(1)
 
         return LangMat
+
+    def FlagTags(self,TagGrps,WrdDict=None):
+        """
+Returns the indices of the words starting with tags in the TagGrps.
+FlagTags([('DT','NP'),('NN','VB')]) will return a first lis of every word starting with DT or NP \
+then a second list of every word starting with NN or VB.
+        :param tags: list of tuples of strings
+        :param WrdDict:
+        :return: lists of ints
+        """
+        if not WrdDict:
+            WrdDict=self.WrdKey
+        TagDict={}
+        i=0
+        for tags in TagGrps:
+            for tag in tags:
+                TagDict[tag]=i
+            i+=1
+        RowList=[list() for j in range(i+1)]
+        for tag in self.tags-TagDict.keys():
+            TagDict[tag]=i
+
+        for Word, row in WrdDict.items():
+            RowList[TagDict[Word.split('_')[0]]].append(row)
+
+        return RowList
 
     def CleanUpStatsMatLil(self, maxDF=100, minDF=5, Smax=5000):
         self.UpdateDict()
@@ -178,7 +222,8 @@ class Projet():
         self.RemoveSeries(RowToDel)
 
         ##Moving onto columns
-        Mat = self.StatsMat.transpose()
+        Mat = self.StatsMat
+        Mat.transpose(copy=False)
 
         # Filtering columns
         maxDF = int(Mat.shape[1] * maxDF / 100)
@@ -191,9 +236,10 @@ class Projet():
             ColToDel += [i[1] for i in NMat[l:r - Smax]]
 
         print('Starting to remove ', len(ColToDel), ' words')
-        self.RemoveWords(ColToDel)
+        self._RemoveWords(ColToDel)
         print(len(ColToDel), ' words removed')
 
+        Mat.transpose(copy=False)
         # done
 
     def CleanUpStatsMat(self, maxDF=100, minDF=5, Smax=5000):
@@ -313,7 +359,7 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
         else:
             self.SsnKey = {key: word for (word,key) in self.RevSsnKey.items()}
 
-    def dumpLil(self,name=None,path=None):
+    def dump(self, name=None, path=None):
         if not path:
             path=self.pathDumps
         if not name:
@@ -323,6 +369,7 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
         elif not os.path.isdir(path+'/'+name):
             raise NotADirectoryError
         dirpath=path+'/'+name
+        print('Saving data to ',dirpath)
 
         with open(dirpath+'/Epimat.dump','w+b') as f:
             pickle.dump(self.StatsMat, f)
@@ -342,7 +389,7 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
                 pickle.dump((self.Skipped,self.ReadErr,self.LangErr),f)
         print('Dump success at ',dirpath)
 
-    def loadLil(self,name=None,path=None):
+    def load(self, name=None, path=None):
         if not path:
             path=self.pathDumps
         if not name:
@@ -350,6 +397,8 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
         if not os.path.exists(path+'/'+name) or not os.path.isdir(path+'/'+name):
             raise NotADirectoryError
         dirpath=path+'/'+name
+
+        print('Loading from ',dirpath)
 
         with open(dirpath+'/EpiMat.dump','r+b') as f:
             self.StatsMat=pickle.load(f)
@@ -368,60 +417,11 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
             with open(dirpath+'/Errors.dump','r+b') as f:
                 self.Skipped,self.ReadErr,self.LangErr=pickle.load(f)
 
-        print('Load success from ',dirpath)
-
-    def dump(self,name=None,EpiMat=True,WrdKey=True,SsnKey=True,StatsMat=True):
-        '''Ecrit self.EpiMat, self.WrdKey, self.SsnKey, self.StatsMat sur le disque sous forme de fichiers .dump.
-Le répertoire utilisé est self.pathDumps'''
-        if not name:
-            if self.StatsMat.shape[0]>2:
-                name=str(self.StatsMat.shape[0])
-            else:
-                name=str(self.StatsMat.shape[0])
-        if EpiMat:
-            file = open(self.pathDumps + '/EpiMat'+name+'.dump', 'w+b')
-            mmwrite(file, self.StatsMat)
-            file.close()
-        if WrdKey:
-            file = open(self.pathDumps + '/WrdKey'+name+'.dump', 'w+b')
-            pickle.dump(self.WrdKey, file)
-            file.close()
-        if SsnKey:
-            file = open(self.pathDumps + '/SsnKey'+name+'.dump', 'w+b')
-            pickle.dump(self.SsnKey, file)
-            file.close()
-        if StatsMat:
-            file = open(self.pathDumps + '/StatsMat'+name+'.dump', 'w+b')
-            pickle.dump(self.StatsMat,file)
-            file.close()
-        print("Done dumping")
-
-    def load(self,name='100',EpiMat=True, WrdKey=True,SsnKey=True,StatsMat=True):
-        '''Charge self.EpiMat, self.WrdKey, self.SsnKey, self.StatsMat depuis le répertoire spécifié par self.pathf.
-Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.mmwrite tandis que self.WrdKey et self.SsnKey sont au format utilisé par le protocole par défaut de pickle'''
-
-
-        if EpiMat:
-            file = open(self.pathDumps + '/EpiMat'+name+'.dump', 'r+b')
-            self.StatsMat = mmread(file).todok()
-            file.close()
-
-        if WrdKey:
-            file = open(self.pathDumps + '/WrdKey'+name+'.dump', 'r+b')
-            self.WrdKey = pickle.load(file)
-            file.close()
-        if SsnKey:
-            file = open(self.pathDumps + '/SsnKey'+name+'.dump', 'r+b')
-            self.SsnKey = pickle.load(file)
-            file.close()
-        if StatsMat:
-            file = open(self.pathDumps + '/StatsMat'+name+'.dump', 'r+b')
-            self.StatsMat = pickle.load(file)
-            file.close()
-        print("Done loading")
         self.UpdateDict()
 
-    def AddEpiToRowLil(self, Text, Row):
+        print('Load success from ',dirpath)
+
+    def AddEpiToRow(self, Text, Row):
         Key = self.WrdKey
         Data=self.SubPat.findall(Text)
         EpiWrds='\n'.join([m[9] for m in Data])
@@ -438,11 +438,11 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
 
         LstWrd=[Key[i] for i in LstWrd]
 
-        self.StatsMat.AddToRow(Counter(LstWrd), Row)
+        self.StatsMat.addtorow(Counter(LstWrd), Row)
 
         return nbWrds
 
-    def AddEpisodeLil(self, SriTitle, numseason, Epi, path=None):
+    def AddEpisode(self, SriTitle, numseason, Epi, path=None):
         if not path:
             path=self.pathData
 
@@ -472,7 +472,7 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
 
         Row = self.SsnKey[SriTitle]
 
-        res = self.AddEpiToRowLil(Contents,Row)
+        res = self.AddEpiToRow(Contents, Row)
 
         if not res:
             return 0
@@ -481,7 +481,7 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
 
         return res
 
-    def AddSeasonLil(self, SriTitle, numseason, path=None):
+    def AddSeason(self, SriTitle, numseason, path=None):
         if not path:
             path=self.pathData
         PathSsn= path + '/' + SriTitle + '/' + numseason
@@ -491,7 +491,7 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
         nbEpi=0
         nbWords=0
         for Epi in sorted(os.listdir(PathSsn)):
-            res=self.AddEpisodeLil(SriTitle, numseason, Epi)
+            res=self.AddEpisode(SriTitle, numseason, Epi)
             if res:
                 nbWords+=res
                 nbEpi+=1
@@ -503,7 +503,7 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
 
         return nbEpi,nbWords
 
-    def AddSerieLil(self, Title, path=None):
+    def AddSerie(self, Title, path=None):
 
         if not path:
             path=self.pathData
@@ -530,7 +530,7 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
         nbWords=0
 
         for Season in LstSsn:
-            res = self.AddSeasonLil(Title,Season)
+            res = self.AddSeason(Title, Season)
             if res[0]:
                 nbSsn+=1
                 nbEpi+=res[0]
@@ -541,7 +541,7 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
 
         return nbSsn, nbEpi, nbWords
 
-    def AddSeriesLil(self, Path=None, m=-1, Numbers=()):
+    def AddSeries(self, Path=None, m=-1, Numbers=()):
         if not Path:
             pathData=self.pathData
         else:
@@ -573,7 +573,7 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
         nbssn=0
         nbepi=0
         for Serie,i in zip(finalset,range(1,len(finalset)+1)):
-            res=self.AddSerieLil(Serie,path=pathData)
+            res=self.AddSerie(Serie, path=pathData)
             if res[0]:
                 nbadd+=1
                 nbssn+=res[0]
@@ -583,8 +583,57 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
         print('{:,} mots dans {:,} épisodes dans {:,} saisons dans {:,} séries.'.format(nbwrds,nbepi,nbssn,nbadd))
         print("{} séries ignorées par manque d'épisodes.".format(len(self.Skipped)))
 
+    def dump_old(self, name=None, EpiMat=True, WrdKey=True, SsnKey=True, StatsMat=True):
+        '''Ecrit self.EpiMat, self.WrdKey, self.SsnKey, self.StatsMat sur le disque sous forme de fichiers .dump.
+Le répertoire utilisé est self.pathDumps'''
+        if not name:
+            if self.StatsMat.shape[0] > 2:
+                name = str(self.StatsMat.shape[0])
+            else:
+                name = str(self.StatsMat.shape[0])
+        if EpiMat:
+            file = open(self.pathDumps + '/EpiMat' + name + '.dump', 'w+b')
+            mmwrite(file, self.StatsMat)
+            file.close()
+        if WrdKey:
+            file = open(self.pathDumps + '/WrdKey' + name + '.dump', 'w+b')
+            pickle.dump(self.WrdKey, file)
+            file.close()
+        if SsnKey:
+            file = open(self.pathDumps + '/SsnKey' + name + '.dump', 'w+b')
+            pickle.dump(self.SsnKey, file)
+            file.close()
+        if StatsMat:
+            file = open(self.pathDumps + '/StatsMat' + name + '.dump', 'w+b')
+            pickle.dump(self.StatsMat, file)
+            file.close()
+        print("Done dumping")
 
-    def AddEpiToRow(self, Text, Row):
+    def load_old(self, name='100', EpiMat=True, WrdKey=True, SsnKey=True, StatsMat=True):
+        '''Charge self.EpiMat, self.WrdKey, self.SsnKey, self.StatsMat depuis le répertoire spécifié par self.pathf.
+Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.mmwrite tandis que self.WrdKey et self.SsnKey sont au format utilisé par le protocole par défaut de pickle'''
+
+        if EpiMat:
+            file = open(self.pathDumps + '/EpiMat' + name + '.dump', 'r+b')
+            self.StatsMat = mmread(file).todok()
+            file.close()
+
+        if WrdKey:
+            file = open(self.pathDumps + '/WrdKey' + name + '.dump', 'r+b')
+            self.WrdKey = pickle.load(file)
+            file.close()
+        if SsnKey:
+            file = open(self.pathDumps + '/SsnKey' + name + '.dump', 'r+b')
+            self.SsnKey = pickle.load(file)
+            file.close()
+        if StatsMat:
+            file = open(self.pathDumps + '/StatsMat' + name + '.dump', 'r+b')
+            self.StatsMat = pickle.load(file)
+            file.close()
+        print("Done loading")
+        self.UpdateDict()
+
+    def AddEpiToRow_old(self, Text, Row):
 
         M = self.StatsMat
         Key = self.WrdKey
@@ -608,7 +657,7 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
 
                 M[Row, M.shape[1] - 1] = 1
 
-    def AddSeries(self, Path, m=-1, Numbers=()):
+    def AddSeries_old(self, Path, m=-1, Numbers=()):
         """
 
         :type Numbers: IntList
@@ -633,10 +682,10 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
             m -= 1
         nbS=0
         for S in Series:
-            nbS+=self.AddSerie(Path + '/' + S)
+            nbS+=self.AddSerie_old(Path + '/' + S)
             print(nbS,' séries ajoutées.')
 
-    def AddSerie(self, Path):
+    def AddSerie_old(self, Path):
         '''Path doit lier à un dossier dont le nom est de la forme spécifiée par SsnPat ('(\d+)___(\S+)'). Le séparateur du path doit être '/'
         :type Path: String
         '''
@@ -694,7 +743,7 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
 
                 File.close()
 
-                self.AddEpiToRow(Contents, NbrSri)
+                self.AddEpiToRow_old(Contents, NbrSri)
         return 1
 
 

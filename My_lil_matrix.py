@@ -1,12 +1,18 @@
-from collections import Counter
+from collections import Counter, defaultdict
 from math import sqrt
 
 from scipy.sparse import isspmatrix_lil, isspmatrix_csr, csr_matrix, lil_matrix
 
+class Defaultdictwithkey(defaultdict):
+    def __missing__(self,key):
+        if self.default_factory is None:
+            raise KeyError( key )
+        else:
+            ret = self[key] = self.default_factory(key)
+            return ret
 
 class My_lil_matrix():
     def __init__(self,arg):
-
         """
         LInked List type of sparse matrix made to work with scipy.sparse
         :param tuple or list or scipy.sparse.lil_matrix or scipy.sparse.csr_matrix:
@@ -24,6 +30,7 @@ class My_lil_matrix():
             self.shape=list(arg.shape)
             self.rows=[arg.indices[arg.indptr[i]:arg.indptr[i+1]].tolist() for i in range(self.shape[0])]
             self.data=[arg.data[arg.indptr[i]:arg.indptr[i+1]].tolist() for i in range(self.shape[0])]
+
     def __getitem__(self,item):
         if type(item)==tuple and len(item)==2:
             if item[1] in self.rows[item[0]]:
@@ -32,9 +39,10 @@ class My_lil_matrix():
                 return 0
         else:
             raise NotImplementedError
+
     def non_zeros(self,axis=2):
         '''
-        0 returns number of nonzeros for each row, 1 returns number of nonzeros for each column, 2 returns number of nonzeros for the whole matrix
+        0 returns number of nonzeros for each column, 1 returns number of nonzeros for each row, 2 returns number of nonzeros for the whole matrix
         :param axis: 0,1 or 2
         :return number of non zeros along given axis:
         '''
@@ -49,6 +57,7 @@ class My_lil_matrix():
             for j in i:
                 res[j]+=1
         return res
+
     def resize(self,shape):
         """
         Resize the matrix to the new shape by suppressing data in suppressed rows or adding zeros.
@@ -68,6 +77,21 @@ class My_lil_matrix():
             self.data=[self.data[i][:len(self.rows[i])] for i in range(self.shape[0])]
 
         self.shape[1]=shape[1]
+
+    def addtorow(self, newData, Row):
+
+        if isinstance(newData, Counter):
+            newData = Counter(dict(zip(self.rows[Row],self.data[Row]))) + newData
+            self.rows[Row],self.data[Row]=[list(i) for i in zip(*newData.items())]
+
+    def addrows(self, rows, res=None):
+
+        if not res:
+            res=rows[0]
+        C=[Counter(dict(zip(self.rows[i],self.data[i]))) for i in rows]
+        C=sum(C)
+        self.rows[res],self.data[res]=[list(i) for i in zip(*C.items())]
+        return C
 
     def combine(self,Matrixes,copy=True):
 
@@ -90,26 +114,6 @@ class My_lil_matrix():
             Mat.rows+=ToAddMat.rows
         return Mat
 
-    def removerow(self,Rows,copy=False):
-        """
-        Return a matrix with rows removed by popping them from the data.
-        Returned matrix is self is copy is False and a copy of self if copy is True.
-        Not advised if the matrix is indexed, see removerowsind.
-        :param copy: boolean
-        :type Rows: List of integers
-        """
-        if copy:
-            Mat=self.copy()
-        else:
-            Mat=self
-        Rows=list(set(Rows))
-        Rows.sort()
-        Rows.reverse()
-        for i in Rows:
-            Mat.rows.pop(i)
-            Mat.data.pop(i)
-        Mat.shape[0]-=len(Rows)
-
     def swaplines(self,Gr1,Gr2,copy=False):
         """
         Swap the lines indicated by Gr1 with the lines indicated by Gr2.
@@ -126,18 +130,8 @@ class My_lil_matrix():
             Mat.data[i],Mat.rows[i]=Mat.data[j],Mat.rows[j]
             Mat.data[j],Mat.rows[j]=td,tr
 
-    def removerowsind(self,Rows):
-        """
-        Remove the rows indicated by Rows, they're first swapped with the last rows of the matrix then deleted,
-         the function return the previous indexes of the rows that are now at the deleted rows's place.
-        :param Rows: List of indices of rows to be removed
-        :return : List of rows now at the place of the removed rows, they're taken from the last rows
-        """
-        R=list(range(self.shape[0]-len(Rows),self.shape[0]))
-        self.swaplines(Rows,R)
-        self.resize((self.shape[0]-len(Rows),self.shape[1]))
-        return R
-    def removerowsind2(self,Rows,Index):
+    def removerowsind(self, Rows, Index):
+
         Rows.sort(reverse=True)
         NewInd=Index.copy()
         N=self.shape[0]
@@ -149,6 +143,20 @@ class My_lil_matrix():
             NewInd.pop(N-i-1)
         self.resize((self.shape[0]-len(Rows),self.shape[1]))
         return NewInd
+
+    def removerowsind2(self, Rows):
+        Rows.sort(reverse=True)
+        Ind=Defaultdictwithkey(lambda x:x)
+        N=self.shape[0]
+        for i in range(len(Rows)):
+            self.rows[Rows[i]]=self.rows[N-i-1]
+            self.data[Rows[i]]=self.data[N-i-1]
+            Ind[Rows[i]]=Ind[N-i-1]
+        for i in range(len(Rows)):
+            del Ind[N-i-1]
+        self.resize((self.shape[0]-len(Rows),self.shape[1]))
+        return Ind
+
     def subgroups(self,SubGroups):
         #each element of SubGroups is a list of indices to be added to the group
         """
@@ -162,13 +170,17 @@ class My_lil_matrix():
             NewMatrixes[i].rows=[self.rows[j] for j in SubGroups[i]]
         return NewMatrixes
 
-    def transpose(self):
+    def transpose(self,copy=True):
         NewMat=My_lil_matrix((self.shape[1],self.shape[0]))
         for i in range(self.shape[0]):
             for j in range(len(self.rows[i])):
                 NewMat.rows[self.rows[i][j]].append(i)
                 NewMat.data[self.rows[i][j]].append(self.data[i][j])
-        return NewMat
+        if not copy:
+            self.rows=NewMat.rows
+            self.data=NewMat.data
+            self.shape=NewMat.shape
+        return NewMat if copy else self
 
     def copy(self):
         NewMat=My_lil_matrix(self.shape)
@@ -254,7 +266,6 @@ class My_lil_matrix():
             for i in range(n):
                 Res[i]=sum([a*b for a,b in zip(self.data[i//m],Mat2.data[i%m])])/(NrmMat1.data[i//m][0]*NrmMat2.data[i%m][0])
             return Res
-
 
     def averagerow(self):
         Res=My_lil_matrix([1,self.shape[1]])

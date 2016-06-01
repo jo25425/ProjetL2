@@ -70,9 +70,9 @@ class Grapher():
             '''
 
             df=self.matrix.non_zeros(0)
-            self.data=[(i[0], df[i[0]], i[1]) for i in zip(self.matrix.rows[Row], self.matrix.data[Row])]
             plt.figure(self.fig.number)
             if not Group:
+                self.data = [(i[0], df[i[0]], i[1]) for i in zip(self.matrix.rows[Row], self.matrix.data[Row])]
                 plt.plot([i[1] for i in self.data], [i[2] for i in self.data], 'd', color=self.parent.cmap(0))
             else:
                 if isinstance(Group[0],int):
@@ -86,14 +86,22 @@ class Grapher():
                                 Groups.append(set())
                 else:
                     Groups=Group
-                Datatoplot=set(self.data)
+                self.data=[(i[0],df[i[0]],i[1]) for i in zip(self.matrix.rows[Row], self.matrix.data[Row])]
                 NbGrp=len(Groups)
+                NGroups=[set() for i in range(NbGrp+1)]
+                for i in self.data:
+                    found=0
+                    for j in range(NbGrp):
+                        if i[0] in Groups[j]:
+                            NGroups[j].add(i)
+                            found=1
+                            break
+                    if not found:
+                        NGroups[NbGrp].add(i)
                 colors=[self.parent.cmap(i) for i in np.linspace(0,1,NbGrp+1)]
-                for SubGrp,color in zip(Groups,colors):
-                    Datatoplot.difference_update(SubGrp)
+                for SubGrp,color in zip(NGroups,colors):
+                    print("len(SubGrp):",len(SubGrp))
                     plt.plot([i[1] for i in SubGrp], [i[2] for i in SubGrp], 'd', color=color)
-                if len(Datatoplot)>0:
-                    plt.plot([i[1] for i in Datatoplot], [i[2] for i in Datatoplot], 'd', color=colors[NbGrp])
 
             plt.xlabel('DF')
             plt.ylabel('TF')

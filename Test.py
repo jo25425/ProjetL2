@@ -19,10 +19,10 @@ else:
     pathData = '/tmp/addic7ed'
 
 
-def go(n=10, N=[1245, 1235, 334, 558, 4], name=None):  # 1000,53,15,1235]):
+def go(n=10, N=(1245, 1235, 334, 558, 4, 1439), name=None):  # 1000,53,15,1235]):
     P.enable()
-    Test.AddSeriesLil(pathData, m=n, Numbers=N)
-    Test.dumpLil(name=name)
+    Test.AddSeries(pathData, m=n, Numbers=N)
+    Test.dump(name=name)
     P.disable()
 
 def g():
@@ -49,6 +49,17 @@ def g():
     print('Done')
     return t
 
+def TestInit(DFmax=70,DFmin=5,TF=True,DF=True,Smax=5000):
+    P.enable()
+    Test.InitStats(DFmax,DFmin,TF,DF,Smax)
+    P.disable()
+
+def TestFunc(f,*args):
+    P.enable()
+    i=f(*args)
+    P.disable()
+    return i
+
 def names(find=False):
     if not os.path.isfile(pathDumps+'/names.dump'):
         find=True
@@ -64,11 +75,13 @@ def names(find=False):
         with open(pathDumps+'/names.dump','r+b')as f:
             return pickle.load(f)
 
+
 if __name__=='__main__':
     P=cProfile.Profile()
     Test=Projet()
     Test.TreeTagger.tag_text('Hello there, what are you doing?')
-    #go(10,name='TestLiL10')
-    Test.loadLil('TestLiL10')
-    #TestG=Grapher(Test)
+    #go(100,name='TestLiL100')
+    Test.load('TestLiL100')
+    i=TestFunc(Test.FlagTags,[('DT','NP'),('NN','VB')])
+    TestG=Grapher(Test)
     #Test.InitStats(maxDF=70,minDF=5,Smax=85,DF=False,TF=True)
