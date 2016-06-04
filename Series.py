@@ -91,10 +91,29 @@ class Projet():
         self.ReadErr = []
         self.LangErr = []
 
+    def UpdateTags(self,WrdDict=None):
+        if not WrdDict:
+            WrdDict=self.WrdKey
+        tags=set()
+        for Wrd in WrdDict:
+            tag=Wrd.split('_')[0]
+            if not tag in tags:
+                tags.add(tag)
+        if WrdDict==self.WrdKey:
+            self.tags=tags
+        return tags
+
     def TxtTrt(self, Text):
         '''Prends en argument une chaine de charactères, retourne une liste de mots'''
         Text = self.TrtPat.sub(' ', Text)
-        LstWrd = [i[1]+'_'+i[2] for i in (j.split('\t') for j in self.TreeTagger.tag_text(Text,notagdns=True,notagemail=True,notagip=True,notagurl=True)) ]
+        def Formatres(TreeTags):
+            try:
+                res=TreeTags[1]+'_'+TreeTags[2]
+                return res
+            except IndexError:
+                return 'Err_'+TreeTags[0]
+
+        LstWrd = [Formatres(i) for i in (j.split('\t') for j in self.TreeTagger.tag_text(Text,notagdns=True,notagemail=True,notagip=True,notagurl=True)) ]
         return LstWrd
 
     def InitStats(self,maxDF=100,minDF=0,TF=True,DF=True,copy=True,Smax=5000):
@@ -129,7 +148,7 @@ class Projet():
         for new, old in Change.items():
             self.RevSsnKey[new]=self.RevSsnKey[old]
             del self.RevSsnKey[old]
-        self.UpdateDict(FromSsn=False)
+        self.UpdateDict(FromRevSsn=1,FromRevWrd=0)
 
     def RemoveWords(self, Words, data=None, RevWrdDict=None):
         if not data:
@@ -145,12 +164,53 @@ class Projet():
             data=self.StatsMat
         if not RevWrdDict:
             RevWrdDict=self.RevWrdKey
-
+        n=data.shape[0]
         Change=data.removerowsind2(Words)
+        k=data.shape[0]
         for new, old in Change.items():
             RevWrdDict[new]=RevWrdDict[old]
-            del RevWrdDict[old]
-        self.UpdateDict(FromWrd=False)
+            assert old>=k
+        for i in range(k,n):
+            del RevWrdDict[i]
+        self.UpdateDict(FromRevWrd=1,FromRevSsn=-1)
+
+    def MergeDelTags(self, TagDict, data=None, WrdDict=None):
+        if not data:
+            data=self.StatsMat
+        data.transpose(copy=False)
+        self._MergeDelTags(TagDict,data)
+        data.transpose(copy=False)
+
+    def _MergeDelTags(self, TagDict, data=None,WrdDict=None):
+        """
+        TagDict doit être un dictionnaire dont les clés sont des tuples de tags, et les valeurs sont les nouveaux noms à donner à ces rassemblement de tags.
+        Si le nom à donner est '', les éléments sont simplement supprimés.
+        :param TagDict: Dict tuple[string]:string
+        :param data:
+        :return:
+        """
+        if not data:
+            data=self.StatsMat
+        if not WrdDict:
+            WrdDict=self.WrdKey
+            RevWrdDict=self.RevWrdKey
+        else:
+            RevWrdDict={v:k for k,v in WrdDict.items()}
+        L=list(TagDict.keys())
+        RowList=self.FlagTags(L,WrdDict)[:-1]
+        RowToDel=[]
+        for key,rows in zip(L,RowList):
+            new_name=TagDict[key]
+            if new_name!='':
+                data.addrows(rows)
+                del WrdDict[RevWrdDict[rows[0]]]
+                WrdDict[new_name]=rows[0]
+                RevWrdDict[rows[0]]=new_name
+                RowToDel+=rows[1:]
+            else:
+                RowToDel+=rows
+        self._RemoveWords(RowToDel,data,RevWrdDict)
+        self.UpdateDict(FromRevWrd=1,FromRevSsn=-1)
 
     def FlagLanguages(self,data=None,WrdDict=None):
 
@@ -203,12 +263,14 @@ then a second list of every word starting with NN or VB.
             TagDict[tag]=i
 
         for Word, row in WrdDict.items():
-            RowList[TagDict[Word.split('_')[0]]].append(row)
-
+            tag=Word.split('_')[0]
+            if tag in TagDict:
+                RowList[TagDict[tag]].append(row)
+            else:
+                RowList[i].append(row)
         return RowList
 
     def CleanUpStatsMatLil(self, maxDF=100, minDF=5, Smax=5000):
-        self.UpdateDict()
         RowToDel = []
         ColToDel = []
         n = self.StatsMat.shape[0]
@@ -250,7 +312,6 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
         :param maxDF:
         :param minDF:
         """
-        self.UpdateDict()
         RowToDel = []
         ColToDel = []
         n = self.StatsMat.shape[0]
@@ -281,7 +342,7 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
 
         print('Starting to remove ', len(RowToDel), ' series')
         self.RevSsnKey=Mat.removerowsind(RowToDel, self.RevSsnKey)
-        self.UpdateDict(FromSsn=0)
+        self.UpdateDict(FromRevSsn=1,FromRevWrd=-1)
 
 
         print(len(RowToDel),' series removed')
@@ -301,7 +362,7 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
 
         print('Starting to remove ', len(ColToDel),' words')
         self.RevWrdKey=Mat.removerowsind(ColToDel, self.RevWrdKey)
-        self.UpdateDict(FromWrd=0)
+        self.UpdateDict(FromRevWrd=1,FromRevSsn=-1)
         print(len(ColToDel),' words removed')
 
         #done
@@ -349,15 +410,15 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
 
         return [i[0] for i in Grps],OldPrt,PrtList
 
-    def UpdateDict(self,FromWrd=1,FromSsn=1):
-        if FromWrd:
-            self.RevWrdKey = {key: word for (word, key) in self.WrdKey.items()}
-        else:
-            self.WrdKey = {key:word for (word,key) in self.RevWrdKey.items()}
-        if FromSsn:
-            self.RevSsnKey = {key: word for (word, key) in self.SsnKey.items()}
-        else:
-            self.SsnKey = {key: word for (word,key) in self.RevSsnKey.items()}
+    def UpdateDict(self,FromRevWrd=0,FromRevSsn=0):
+        if FromRevWrd==1:
+            self.WrdKey = {key: word for (word, key) in self.RevWrdKey.items()}
+        elif FromRevWrd==0:
+            self.RevWrdKey = {key:word for (word,key) in self.WrdKey.items()}
+        if FromRevSsn:
+            self.SsnKey = {key: word for (word, key) in self.RevSsnKey.items()}
+        elif FromRevSsn==0:
+            self.RevSsnKey = {key: word for (word,key) in self.SsnKey.items()}
 
     def dump(self, name=None, path=None):
         if not path:
@@ -396,6 +457,7 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
             pass
         if not os.path.exists(path+'/'+name) or not os.path.isdir(path+'/'+name):
             raise NotADirectoryError
+        self.cur_title=name
         dirpath=path+'/'+name
 
         print('Loading from ',dirpath)
@@ -417,7 +479,7 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
             with open(dirpath+'/Errors.dump','r+b') as f:
                 self.Skipped,self.ReadErr,self.LangErr=pickle.load(f)
 
-        self.UpdateDict()
+        self.UpdateDict(FromRevSsn=0,FromRevWrd=0)
 
         print('Load success from ',dirpath)
 
@@ -537,6 +599,9 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
                 nbWords+=res[1]
         if not nbSsn:
             return 0, 0, 0
+        if len(self.StatsMat.rows[self.StatsMat.shape[0]-1])==0:
+            self.StatsMat.resize((self.StatsMat.shape[0]-1,self.StatsMat.shape[1]))
+            return 0, 0, 0
         self.SriData.append((Title,nbSsn,nbEpi,nbWords))
 
         return nbSsn, nbEpi, nbWords
@@ -631,7 +696,7 @@ Les fichiers EpiMat.dump et StatsMat.dump sont au format renvoyé par scipy.io.m
             self.StatsMat = pickle.load(file)
             file.close()
         print("Done loading")
-        self.UpdateDict()
+        self.UpdateDict(FromRevSsn=0,FromRevWrd=0)
 
     def AddEpiToRow_old(self, Text, Row):
 
