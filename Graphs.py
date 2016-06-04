@@ -1,6 +1,6 @@
-
-
 import matplotlib.pyplot as plt
+import nltk
+
 from Series import Projet
 from My_lil_matrix import My_lil_matrix
 import pdb
@@ -13,6 +13,39 @@ class Grapher():
         self.Proj=Proj
         self.cmap=plt.get_cmap('Set1')
         self.cur_rep=[]
+        self.cur_figs=[]
+
+    def LangRepartition(self,Proj=None):
+        self.cur_figs.append(plt.figure())
+        if not Proj:
+            Proj=self.Proj
+        Langs=nltk.corpus.stopwords._fileids
+        LangMat=list(Proj.FlagLanguages())
+        xy=[(LangMat.count(i),i) for i in range(len(Langs))]
+        y,x=zip(*xy)
+        plt.xticks(x,[Langs[i] for i in x])
+        plt.plot(x,y,'d')
+        plt.yscale('log')
+        plt.title('Répartition des langues sur %d séries'%len(LangMat))
+
+    def TagsRepartition(self,Proj=None,sort=True):
+        self.cur_figs.append(plt.figure())
+        if not Proj:
+            Proj=self.Proj
+        tags=[(tag,) for tag in Proj.tags]
+        k=Proj.FlagTags(tags)
+        n=len(Proj.WrdKey)
+        taglen=[(tag[0],len(Words)/n) for tag,Words in zip(tags,k)]
+        if sort:
+            taglen.sort(key=lambda x:x[1])
+        x=list(range(len(tags)))
+        plt.xticks(x,[i[0] for i in taglen],rotation=45)
+        plt.tick_params(axis='x',which='major',labelsize=8)
+        y=[i[1] for i in taglen]
+        plt.plot(x,y,'d')
+        plt.yscale('log')
+        plt.title('Répartition des tags sur %d mots'%n)
+
     def FindBestRows(self,row=None):
         '''
         The goal of the function is to return 2 indexes that best represent the data or the index that best represent the data in conjunction with row if row is provided.
@@ -29,6 +62,7 @@ class Grapher():
             return i
         else:
             return i%self.Proj.StatsMat.shape[0],i//self.Proj.StatsMat.shape[0]
+
     def ComparedToRows(self, n1, n2,GroupBy=None,data=None):
         if not data:
             data=self.Proj.StatsMat
@@ -53,6 +87,7 @@ class Grapher():
         plt.ylabel('Proximité à {}'.format(self.Proj.RevSsnKey[n2]))
         plt.axis([0, max(values[:m], key=lambda x:0 if x >= 0.99 else x), 0, max(values[m:], key=lambda x:0 if x >= 0.99 else x)])
         plt.show()
+
     class _TFDFRep():
         def __init__(self,parent,Row=None):
             self.parent=parent
@@ -61,6 +96,7 @@ class Grapher():
             parent.cur_rep.append(self)
             if Row:
                 self.LoadRow(Row)
+
         def LoadRow(self,Row,Group=None):
             '''
 
@@ -108,6 +144,7 @@ class Grapher():
             self.fig.suptitle(self.parent.Proj.RevSsnKey[Row])
 
             plt.show()
+
         def FindWordsatPos(self,xycoord,xymax=None,n=10):
             '''
 
@@ -128,11 +165,13 @@ class Grapher():
                 return [(self.parent.Proj.RevWrdKey[i[0]],i[1],i[2]) for i in sorted(self.data,key=dist)[:n]]
             return [(self.parent.Proj.RevWrdKey[i[0]],i[1],i[2]) for i in self.data if xymax[1] >= i[2] >=
                     xycoord[1] and xymax[0] >= i[1] >= xycoord[0]]
+
         def AnnotateWordsatPos(self,xycoord,xymax=None,n=10):
             plt.figure(self.fig.number)
             data=self.FindWordsatPos(xycoord,xymax,n)
             for i in data:
                 plt.annotate(i[0], xy=(i[1], i[2]))
+
     def SerieTFDF(self, Row, GroupBy=None, data=None):
         '''
         Renvoie un objet permettant de représenter les mots présents dans la série au rang Row.
@@ -168,7 +207,6 @@ class Grapher():
             plt.plot(range(Transpose.shape[1]),[Transpose[i,j] for j in range(Transpose.shape[1])],color=colors[i],label=Words[i])
         plt.legend()
         plt.show()
-
 
     def PCA(self,Kmeans=True,k=10):
         assert self.Proj.StatsMat.shape[0]>self.Proj.StatsMat.shape[1]
