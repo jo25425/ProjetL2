@@ -64,11 +64,11 @@ def TestFunc(f, *args):
     return i
 
 
-def TestTotal():
+def TestTotal(name='Testfont100'):
     P.enable()
-    Test.load(name='Testfont100')
+    Test.load(name)
 
-    Test.cur_title='Testfont100'
+    Test.cur_title=name
     if not os.path.isdir(pathDumps+'/'+Test.cur_title):
         os.mkdir(pathDumps+'/'+Test.cur_title)
     GoT_Key = Test.SsnKey['1245___Game_of_Thrones']
