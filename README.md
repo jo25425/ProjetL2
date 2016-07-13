@@ -1,6 +1,6 @@
 # ProjetL2
 
-##### Setup
+#### Setup
 
 Developped and tested on Windows 10 with [WinPython 3.4.4.1](https://winpython.github.io/) which is a Python 3.4 implementation.
 
@@ -10,7 +10,7 @@ In addition to the libraries provided by WinPython, the followings were also use
 - [treetaggerwrapper](https://perso.limsi.fr/pointal/dev:treetaggerwrapper)  
 - [TreeTagger](http://www.cis.uni-muenchen.de/~schmid/tools/TreeTagger/)(not a library)
 
-##### Usage
+#### Usage
 
 The code is organised between 3 files(Grapher,Series,My_lil_matrix), My_lil_matrix doesn't call Series which doesn't call Grapher.  
 This makes My_lil_matrix independant from the others and easier to reuse.
