@@ -63,13 +63,13 @@ class Projet():
         self.SsnData= [] #list of tuples
         self.EpiData = [] #list of tuples
         self.KGroupes=[] #list of numbers
-        self.Prototypes=[] # list of lists
+        self.Prototypes=My_lil_matrix((0,0))
 
         #Initialising Constants
 
         self.pathDumps = Dumps
         self.pathData = Data
-        self.cur_title = None
+        self.cur_title = 'AT_'
         self.Languages = ['english']
         self.Stemmer=nltk.stem.SnowballStemmer('english')
         self.TreeTagger=treetaggerwrapper.TreeTagger(TAGLANG='en')
@@ -84,7 +84,7 @@ class Projet():
         self.EpiPat = re.compile(r'(\d+)__(\S+).txt')
         self.SubPat = re.compile(
             r'(\d+)\n(\d\d):(\d\d):(\d\d),(\d\d\d) --> (\d\d):(\d\d):(\d\d),(\d\d\d)\n(.*?)(?=(\n\d+\n)|\Z)', re.DOTALL)
-        self.TrtPat = re.compile(r" +")
+        self.TrtPat = re.compile("(?:[_\n]+)|(?:<.*?>)")
 
         # Logging failures
         self.Skipped = []
@@ -106,17 +106,24 @@ class Projet():
     def TxtTrt(self, Text):
         '''Prends en argument une chaine de charactères, retourne une liste de mots'''
         Text = self.TrtPat.sub(' ', Text)
+        LstWrd=[]
         def Formatres(TreeTags):
             try:
                 res=TreeTags[1]+'_'+TreeTags[2]
+                if res=='NNS_i':
+                    print(LstWrd[-10:])
                 return res
             except IndexError:
-                return 'Err_'+TreeTags[0]
-
-        LstWrd = [Formatres(i) for i in (j.split('\t') for j in self.TreeTagger.tag_text(Text,notagdns=True,notagemail=True,notagip=True,notagurl=True)) ]
+                return 'ERR_'+TreeTags[0]
+        for j in self.TreeTagger.tag_text(Text,notagdns=True,notagemail=True,notagip=True,notagurl=True):
+            i=j.split('\t')
+            LstWrd.append(Formatres(i))
+        #LstWrd = [Formatres(i) for i in (j.split('\t') for j in self.TreeTagger.tag_text(Text,notagdns=True,notagemail=True,notagip=True,notagurl=True)) ]
         return LstWrd
 
     def InitStats(self,maxDF=100,minDF=0,TF=True,DF=True,copy=True,Smax=5000):
+        if self.cur_title.startswith('AT_'):
+            self.cur_title+='_%d_%d_%d'%maxDF,minDF,Smax
         self.StatsMat.apply(float)
         print('Matrix values changed to floats')
         self.CleanUpStatsMatLil(maxDF,minDF,Smax)
@@ -134,8 +141,12 @@ class Projet():
             self.StatsMat=self.StatsMat.transpose()
             self.StatsMat.apply(DFnorm,axis=2)
             self.StatsMat=self.StatsMat.transpose()
+            if self.cur_title.startswith('AT_'):
+                self.cur_title+='DF'
         if TF:
             self.StatsMat.apply(TFnorm,axis=2)
+            if self.cur_title.startswith('AT_'):
+                self.cur_title+='TF'
 
     def RemoveSeries(self,Series):
         '''Test
@@ -177,9 +188,15 @@ class Projet():
     def MergeDelTags(self, TagDict, data=None, WrdDict=None):
         if not data:
             data=self.StatsMat
+        if self.cur_title.startswith('AT_'):
+            self.cur_title+='TAG'
+        print('Transposing data for tag merge')
         data.transpose(copy=False)
+        print('Starting tag merge')
         self._MergeDelTags(TagDict,data)
+        print('Tags merged')
         data.transpose(copy=False)
+        print('Data tranposed back after tag merge')
 
     def _MergeDelTags(self, TagDict, data=None,WrdDict=None):
         """
@@ -199,9 +216,12 @@ class Projet():
         L=list(TagDict.keys())
         RowList=self.FlagTags(L,WrdDict)[:-1]
         RowToDel=[]
+        print('Starting merging...')
+        print(len(L),len(RowList))
         for key,rows in zip(L,RowList):
             new_name=TagDict[key]
             if new_name!='':
+                print('Adding %d rows'%len(rows))
                 data.addrows(rows)
                 del WrdDict[RevWrdDict[rows[0]]]
                 WrdDict[new_name]=rows[0]
@@ -209,7 +229,9 @@ class Projet():
                 RowToDel+=rows[1:]
             else:
                 RowToDel+=rows
+        print('Starting Deletion')
         self._RemoveWords(RowToDel,data,RevWrdDict)
+        print('Updating dicts')
         self.UpdateDict(FromRevWrd=1,FromRevSsn=-1)
 
     def FlagLanguages(self,data=None,WrdDict=None):
@@ -269,6 +291,14 @@ then a second list of every word starting with NN or VB.
             else:
                 RowList[i].append(row)
         return RowList
+
+    def GetWordsInPrototypes(self,NbWords=10):
+        zippeddata=[zip(self.Prototypes.rows[i],self.Prototypes.data[i]) for i in range(self.Prototypes.shape[0])]
+        data=[[(self.RevWrdKey[i[0]],i[1]) for i in j] for j in zippeddata]
+        for i in data:
+            i.sort(reverse=True,key=lambda x:x[1])
+        print(len(data),[len(i) for i in data])
+        return [i[:NbWords] for i in data]
 
     def CleanUpStatsMatLil(self, maxDF=100, minDF=5, Smax=5000):
         RowToDel = []
@@ -612,6 +642,9 @@ Currently removes columns with a Document Frequency DF higher than maxDF% or low
         else:
             pathData=Path
         SetSri = {i for i in os.listdir(Path) if os.path.isdir(Path+'/'+i)}
+
+        if self.cur_title.startswith('AT_'):
+            self.cur_title+='%dS'%m
 
         if m<0:
             finalset=SetSri

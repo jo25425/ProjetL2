@@ -14,7 +14,13 @@ class Defaultdictwithkey(defaultdict):
 class My_lil_matrix():
     def __init__(self,arg):
         """
-        LInked List type of sparse matrix made to work with scipy.sparse
+        LInked List type of sparse matrix made to replace scipy.sparse.lil_matrix
+        Uses the scipy.sparse implementation of sparse matrix product.
+
+        Most operations and functions are only implemented for rows, the matrix should be transposed if there is a need
+        to do those operations on columns
+
+        The initialisation arg can be a tuple or list of len 2 to describe the shape of the matrix or another matrix to be used as initial values
         :param tuple or list or scipy.sparse.lil_matrix or scipy.sparse.csr_matrix:
         """
         if type(arg)==tuple or type(arg)==list:
@@ -32,6 +38,11 @@ class My_lil_matrix():
             self.data=[arg.data[arg.indptr[i]:arg.indptr[i+1]].tolist() for i in range(self.shape[0])]
 
     def __getitem__(self,item):
+        '''
+        Return the value of the item at the intersection the item[0]th row and the item[1]th column
+        :param item: tuple of len 2
+        :return:
+        '''
         if type(item)==tuple and len(item)==2:
             if item[1] in self.rows[item[0]]:
                 return self.data[item[0]][self.rows[item[0]].index(item[1])]
@@ -79,22 +90,35 @@ class My_lil_matrix():
         self.shape[1]=shape[1]
 
     def addtorow(self, newData, Row):
-
+        """
+        Adds newData to the Rowth row of the matrix.
+        newData can be a collections.Counter object
+        :param newData: Counter
+        :param Row: int
+        :return:
+        """
         if isinstance(newData, Counter):
             newData = Counter(dict(zip(self.rows[Row],self.data[Row]))) + newData
             self.rows[Row],self.data[Row]=[list(i) for i in zip(*newData.items())]
 
     def addrows(self, rows, res=None):
-
+        """
+        rows must be a list of rows to be added together.
+        res is the number of the row receiving the sum as its new value, it defaults to rows[0]
+        :param rows: list of ints
+        :param res: int
+        :return:
+        """
         if not res:
             res=rows[0]
-        C=[Counter(dict(zip(self.rows[i],self.data[i]))) for i in rows]
-        C=sum(C)
+        CList=[Counter(dict(zip(self.rows[i],self.data[i]))) for i in rows]
+        C=Counter()
+        for i in CList:
+            C+=i
         self.rows[res],self.data[res]=[list(i) for i in zip(*C.items())]
         return C
 
     def combine(self,Matrixes,copy=True):
-
         """
         Return a matrix that's the vertical stacking of self and the matrixes in Matrixes.
         The number of a column of the result is adapted to the new matrixes.

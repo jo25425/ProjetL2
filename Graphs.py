@@ -23,7 +23,7 @@ class Grapher():
         LangMat=list(Proj.FlagLanguages())
         xy=[(LangMat.count(i),i) for i in range(len(Langs))]
         y,x=zip(*xy)
-        plt.xticks(x,[Langs[i] for i in x])
+        plt.xticks(x,[Langs[i] for i in x],rotation=45)
         plt.plot(x,y,'d')
         plt.yscale('log')
         plt.title('Répartition des langues sur %d séries'%len(LangMat))
@@ -142,8 +142,6 @@ class Grapher():
             plt.xlabel('DF')
             plt.ylabel('TF')
             self.fig.suptitle(self.parent.Proj.RevSsnKey[Row])
-
-            plt.show()
 
         def FindWordsatPos(self,xycoord,xymax=None,n=10):
             '''
