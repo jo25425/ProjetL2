@@ -17,7 +17,7 @@ This makes My_lil_matrix independant from the others and easier to reuse.
 
 In addition, Test.py is used to keep all the common test routines in a single file. It should be used as a main file for ease of use but it doesn't make additionnal import calls to Grapher.py, feel free to edit it for testing purposes.
 
-The simplest way to use this after setting the paths would be calling Test.g() then Test.TestTotal().
+The simplest way to use this after setting the paths would be calling go('Test') then TestTotal('Test').
 
 This is best used in an interactive console.
 
