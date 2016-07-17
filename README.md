@@ -4,7 +4,7 @@
 
 Developped and tested on Windows 10 with [WinPython 3.4.4.1](https://winpython.github.io/) which is a Python 3.4 implementation.
 
-The data used for testing (thus, the formatting supported for pulling data) was taken from [here](http://www-connex.lip6.fr/~baskiotisn/pldac//addic7ed.tgz).
+The data used for testing (thus, the formatting supported for pulling data) was taken from [here](http://www-connex.lip6.fr/~baskiotisn/pldac//addic7ed.tgz).(1.3Gb download for 5Go of data)
 
 In addition to the libraries provided by WinPython, the followings were also used:  
 - [treetaggerwrapper](https://perso.limsi.fr/pointal/dev:treetaggerwrapper)  
