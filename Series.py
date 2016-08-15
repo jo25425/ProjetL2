@@ -45,19 +45,23 @@ import pdb
 
 from My_lil_matrix import My_lil_matrix
 
-if os.environ['COMPUTERNAME'] == 'TIE':
+if 'COMPUTERNAME' in os.environ and os.environ['COMPUTERNAME'] == 'TIE':
     pathDumps = 'C:/Users/Vivien/PycharmProjects/ProjetL2/dumps'
     pathData = 'E:/Documents/Programmes/addic7ed'
-elif os.environ['COMPUTERNAME'] == 'Janice':
+elif 'COMPUTERNAME' in os.environ and os.environ['COMPUTERNAME'] == 'Janice':
     pathDumps = 'C:\projet l2'
     pathData = 'C:\tmp\addic7ed\addic7ed'
 else:
-    pathDumps = '/tmp'
-    pathData = '/tmp/addic7ed'
+    # Stored in current directory
+    pathDumps = os.path.join(os.getcwd(), 'tmp')
+    pathData = os.path.join(pathDumps, 'addic7ed')
+    # Stored at root
+    # pathDumps = '/tmp'
+    # pathData = '/tmp/addic7ed'
 
 
 class Projet():
-    def __init__(self ,Dumps=pathDumps, Data=pathData):
+    def __init__(self, Dumps=pathDumps, Data=pathData):
 
         # Initialising variables
         self.WrdKey = dict()
