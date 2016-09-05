@@ -1,3 +1,7 @@
+# Project package and temporary files
+__pycache__
+tmp
+
 # Windows image file caches
 Thumbs.db
 ehthumbs.db

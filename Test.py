@@ -6,16 +6,22 @@ from sklearn.decomposition import PCA
 import cProfile
 import pdb
 
-if os.environ['COMPUTERNAME'] == 'TIE':
+pathProj = pathDumps = pathData = ''
+
+if 'COMPUTERNAME' in os.environ and os.environ['COMPUTERNAME'] == 'TIE':
     pathProj = 'C:/Users/Vivien/PycharmProjects/ProjetL2'
     pathDumps = 'C:/Users/Vivien/PycharmProjects/ProjetL2/dumps'
     pathData = 'E:/Documents/Programmes/addic7ed'
-elif os.environ['COMPUTERNAME'] == 'Janice':
+elif 'COMPUTERNAME' in os.environ and os.environ['COMPUTERNAME'] == 'Janice':
     pathDumps = 'C:\projet l2'
     pathData = 'C:\tmp\addic7ed\addic7ed'
 else:
-    pathDumps = '/tmp'
-    pathData = '/tmp/addic7ed'
+    # Stored in current directory
+    pathDumps = os.path.join(os.getcwd(), 'tmp')
+    pathData = os.path.join(pathDumps, 'addic7ed')
+    # Stored at root
+    # pathDumps = '/tmp'
+    # pathData = '/tmp/addic7ed'
 
 
 def go(n=10, N=(1245, 1235, 334, 558, 4, 1439, 358), name=None):  # 1000,53,15,1235]):
@@ -64,13 +70,13 @@ def TestFunc(f, *args):
     return i
 
 
-def TestTotal(name='Testfont100'):
+def TestTotal():
     P.enable()
-    Test.load(name)
+    Test.load(name='Testfont100')
 
-    Test.cur_title=name
-    if not os.path.isdir(pathDumps+'/'+Test.cur_title):
-        os.mkdir(pathDumps+'/'+Test.cur_title)
+    Test.cur_title = 'Testfont100'
+    if not os.path.isdir(pathDumps + '/' + Test.cur_title):
+        os.mkdir(pathDumps + '/' + Test.cur_title)
     GoT_Key = Test.SsnKey['1245___Game_of_Thrones']
     Buffy_Key = Test.SsnKey['334___Buffy_The_Vampire_Slayer']
     Angel_Key = Test.SsnKey['558___Angel']
@@ -184,14 +190,14 @@ if __name__ == '__main__':
     Test.TreeTagger.tag_text('Hello there, what are you doing?')
     TestG = Grapher(Test)
     # t=TestWordsInPrototypes()
-    go(100)#, name='Testfont100')
+    go(1)  # , name='Testfont100')
     # Test.load('TestLiL100')
     # i=TestFunc(Test.MergeDelTags,{('NP',):'NP_ANY',('SYM','(',')','#',"''",'$','``',':',',','FW'):''})
     # P1=TestCounter1()
     # P2=TestCounter2()
     # P1.print_stats(sort='cumtime')
     # P2.print_stats(sort='cumtime')
-    #TestTotal()
+    # TestTotal()
     # Test.InitStats(maxDF=70,minDF=5,Smax=85,DF=False,TF=True)
 
     # Tags update
